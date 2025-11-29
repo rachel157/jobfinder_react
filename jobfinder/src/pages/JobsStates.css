@@ -1,0 +1,66 @@
+.jobs-error-card{
+  border:1px solid #fca5a5;
+  background:#fee2e2;
+  border-radius:14px;
+  padding:12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:12px;
+}
+
+.jobs-error-text strong{
+  color:#b91c1c;
+  display:block;
+}
+
+.jobs-error-text p{
+  margin:4px 0 0;
+  color:#b91c1c;
+}
+
+.jobs-error-btn{
+  border:1px solid #fca5a5;
+  background:#fff;
+  color:#b91c1c;
+  padding:8px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  font-weight:700;
+}
+
+.job-card.skeleton{
+  border:1px solid #e2e8f0;
+  border-radius:16px;
+  background:#f8fafc;
+  padding:14px;
+}
+
+.skeleton-line{
+  height:12px;
+  background:#e2e8f0;
+  border-radius:8px;
+  margin-bottom:8px;
+}
+
+.skeleton-line.lg{
+  height:16px;
+  width:70%;
+}
+
+.skeleton-line.short{
+  width:50%;
+}
+
+.skeleton-tags{
+  display:flex;
+  gap:8px;
+}
+
+.skeleton-chip{
+  height:22px;
+  width:60px;
+  background:#e2e8f0;
+  border-radius:999px;
+}
