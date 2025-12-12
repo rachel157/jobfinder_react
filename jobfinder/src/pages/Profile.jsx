@@ -2,6 +2,7 @@
 import Modal from '../components/Modal.jsx'
 import { ProfileClient } from '../services/profileClient'
 import { UploadClient } from '../services/uploadClient'
+import { calculateProfileCompletion } from '../utils/profileCompletion'
 
 const jobTypeOptions = [
   { value: 'full_time', label: 'Full-time' },
@@ -290,6 +291,11 @@ export default function Profile(){
 
   const hasProfile = Boolean(profile?.id)
 
+  const completion = useMemo(() => {
+    if (!profile) return null
+    return calculateProfileCompletion(profile)
+  }, [profile])
+
   const entityDefinitions = useMemo(() => {
     return {
       experiences: {
@@ -400,22 +406,18 @@ export default function Profile(){
         idKey: 'skill_id',
         items: profile?.skills || [],
         fields: [
-          { name: 'skill_id', label: 'Skill ID (UUID)', type: 'text', required: true, placeholder: 'Nhập mã kỹ năng có sẵn', disableOnEdit: true },
           { name: 'level', label: 'Cấp độ', type: 'select', options: skillLevelOptions },
           { name: 'proficiency', label: 'Điểm thành thạo (1-5)', type: 'number', min: 1, max: 5 },
         ],
         initialValues: {
-          skill_id: '',
           level: '',
           proficiency: '',
         },
         toForm: (item) => ({
-          skill_id: item?.skill_id || '',
           level: item?.level || '',
           proficiency: item?.proficiency ?? '',
         }),
         toPayload: (values) => ({
-          skill_id: values.skill_id,
           level: values.level || undefined,
           proficiency: values.proficiency ? Number(values.proficiency) : undefined,
         }),
@@ -426,7 +428,6 @@ export default function Profile(){
           title: item.skills?.name || 'Kỹ năng',
           subtitle: item.skills?.category || '',
           meta: [item.level && item.level.toUpperCase(), item.proficiency && `Điểm ${item.proficiency}`].filter(Boolean).join(' • '),
-          description: item.skill_id,
         }),
       },
       certifications: {
@@ -801,20 +802,43 @@ export default function Profile(){
                 Tạo hồ sơ JobFinder để ứng tuyển nhanh, theo dõi trạng thái và được ưu tiên trong kết quả tìm kiếm.
               </p>
             </div>
-            <div className="profile-hero__stats">
-              <div>
-                <strong>3x</strong>
-                <span>Tỷ lệ được liên hệ</span>
-              </div>
-              <div>
-                <strong>15+</strong>
-                <span>Nhà tuyển dụng quan tâm</span>
-              </div>
-            </div>
           </div>
         </div>
 
         {fetchError && <div className="error-banner profile-banner">{fetchError}</div>}
+
+        {/* Profile Completion Indicator */}
+        {profile && completion && (
+          <div className="card profile-completion">
+            <div className="profile-completion__header">
+              <h3 className="profile-completion__title">Mức độ hoàn thành hồ sơ</h3>
+              <div className={`profile-completion__percentage ${completion.isComplete ? 'profile-completion__percentage--complete' : ''}`}>
+                {completion.percentage}%
+              </div>
+            </div>
+            <div className="profile-completion__progress">
+              <div 
+                className={`profile-completion__progress-bar ${completion.isComplete ? 'profile-completion__progress-bar--complete' : completion.percentage >= 50 ? 'profile-completion__progress-bar--warning' : 'profile-completion__progress-bar--danger'}`}
+                style={{ width: `${completion.percentage}%` }}
+              />
+            </div>
+            {!completion.isComplete && completion.missingItems.length > 0 && (
+              <div className="profile-completion__missing">
+                <p className="profile-completion__missing-title">Cần hoàn thành:</p>
+                <ul className="profile-completion__missing-list">
+                  {completion.missingItems.map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {completion.isComplete && (
+              <div className="profile-completion__success">
+                Hồ sơ của bạn đã hoàn thành! Bạn có thể tạo CV từ hồ sơ này.
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="profile-grid">
           <div className="card profile-form-card">

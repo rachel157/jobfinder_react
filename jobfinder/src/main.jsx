@@ -1,4 +1,4 @@
-﻿import React from "react"
+import React from "react"
 import { createRoot } from "react-dom/client"
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import App from "./App.jsx"
@@ -24,6 +24,9 @@ import CompanyOnboardingPage from "./pages/CompanyOnboardingPage.jsx"
 import RecruiterCompanyPage from "./pages/RecruiterCompanyPage.jsx"
 import RecruiterCompanyGuard from "./pages/RecruiterCompanyGuard.jsx"
 import CompanyDetailsPage from "./pages/CompanyDetailsPage.jsx"
+import ResumesList from "./pages/ResumesList.jsx"
+import ResumeCreate from "./pages/ResumeCreate.jsx"
+import ResumeDetail from "./pages/ResumeDetail.jsx"
 import "./index.css"
 
 const router = createBrowserRouter([
@@ -53,6 +56,21 @@ const router = createBrowserRouter([
       { path: 'profile', element: (
         <RequireSeeker>
           <Profile />
+        </RequireSeeker>
+      ) },
+      { path: 'resumes', element: (
+        <RequireSeeker>
+          <ResumesList />
+        </RequireSeeker>
+      ) },
+      { path: 'resumes/create', element: (
+        <RequireSeeker>
+          <ResumeCreate />
+        </RequireSeeker>
+      ) },
+      { path: 'resumes/:id', element: (
+        <RequireSeeker>
+          <ResumeDetail />
         </RequireSeeker>
       ) },
       { path: 'post-job', element: (

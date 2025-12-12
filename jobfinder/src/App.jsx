@@ -148,6 +148,11 @@ export default function App(){
                         <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/profile') }}>
                           Hồ sơ của tôi
                         </button>
+                        {role === 'seeker' && (
+                          <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/resumes') }}>
+                            CV của tôi
+                          </button>
+                        )}
                         <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/change-password') }}>
                           Đổi mật khẩu
                         </button>
@@ -237,3 +242,4 @@ export default function App(){
     </div>
   )
 }
+

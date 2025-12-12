@@ -10,6 +10,16 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        secure: false,
+        // Forward all headers including Authorization
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            // Forward Authorization header if present
+            if (req.headers.authorization) {
+              proxyReq.setHeader('Authorization', req.headers.authorization)
+            }
+          })
+        },
         // If your backend does not have /api prefix, remove rewrite
         // and call full paths in your API client.
         // rewrite: (path) => path.replace(/^\/api/, ''),
