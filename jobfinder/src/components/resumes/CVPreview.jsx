@@ -29,7 +29,16 @@ export default function CVPreview({ profileData, title, theme = 'professional', 
   // Get additional data (projects, languages, summary, references)
   const projects = additionalData.projects || []
   const languages = additionalData.languages || []
-  const summary = additionalData.summary || ''
+
+  // summary có thể là string hoặc object { content, enabled }
+  const rawSummary = additionalData.summary
+  const summary =
+    typeof rawSummary === 'string'
+      ? rawSummary
+      : typeof rawSummary === 'object' && rawSummary !== null
+      ? rawSummary.content || ''
+      : ''
+
   const references = additionalData.references || []
 
   // Prepare data for template

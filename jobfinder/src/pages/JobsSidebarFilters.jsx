@@ -77,15 +77,31 @@ export default function JobsSidebarFilters({
           <div className="salary-inputs filter-group--salary">
             <input
               type="number"
+              min="0"
+              step="1"
               placeholder="Lương tối thiểu"
               value={salaryMin}
-              onChange={(e) => onSalaryMinChange(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value
+                // Only allow positive numbers or empty string
+                if (val === '' || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0)) {
+                  onSalaryMinChange(val)
+                }
+              }}
             />
             <input
               type="number"
+              min="0"
+              step="1"
               placeholder="Lương tối đa"
               value={salaryMax}
-              onChange={(e) => onSalaryMaxChange(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value
+                // Only allow positive numbers or empty string
+                if (val === '' || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0)) {
+                  onSalaryMaxChange(val)
+                }
+              }}
             />
           </div>
         </div>

@@ -123,15 +123,65 @@ const SAMPLE_COMPANIES = {
 
 const normalizeCompany = (raw) => {
   if (!raw) return null
-  const details = raw.company_details || {}
-  const location = details.headquarters_location?.name || raw.contact_address || ''
-  const openJobs = raw.open_jobs || []
+  
+  // Handle response format: { message, data } or direct data
+  const companyData = raw?.data ?? raw
+  if (!companyData) return null
+  
+  // Map company_details - backend returns as object
+  const details = companyData.company_details || {}
+  
+  // Map location - can be from company_details.headquarters_location or contact_address
+  const location = 
+    details.headquarters_location?.name || 
+    companyData.contact_address || 
+    ''
+  
+  // Backend returns 'jobs' array, map to 'open_jobs' for consistency
+  // Also ensure jobs have proper structure
+  const openJobs = (companyData.open_jobs || companyData.jobs || []).map((job) => {
+    // Ensure job has location mapped correctly
+    if (job.locations && typeof job.locations === 'object') {
+      return {
+        ...job,
+        location: {
+          id: job.locations.id,
+          name: job.locations.name,
+          type: job.locations.type
+        }
+      }
+    }
+    return job
+  })
+  
+  // Map company_benefits - backend returns as array
+  const benefits = companyData.company_benefits || []
+  
   return {
-    ...raw,
+    ...companyData,
+    // Core company fields
+    id: companyData.id,
+    name: companyData.name,
+    description: companyData.description,
+    logo_url: companyData.logo_url,
+    size: companyData.size,
+    contact_email: companyData.contact_email,
+    contact_phone: companyData.contact_phone,
+    contact_address: companyData.contact_address,
+    linkedin_url: companyData.linkedin_url,
+    facebook_url: companyData.facebook_url,
+    twitter_url: companyData.twitter_url,
+    created_at: companyData.created_at,
+    updated_at: companyData.updated_at,
+    
+    // Nested objects
     company_details: details,
+    company_benefits: benefits,
+    
+    // Computed fields
     location,
     open_jobs: openJobs,
-    stats: raw.stats || { open_jobs_count: openJobs.length || 0 },
+    stats: companyData.stats || { open_jobs_count: openJobs.length || 0 },
   }
 }
 
@@ -158,11 +208,19 @@ export default function CompanyDetailsPage() {
 
         const data = await companyApi.getPublicCompany(id)
         if (!mounted) return
-        setCompany(normalizeCompany(data))
+        
+        const normalized = normalizeCompany(data)
+        if (!normalized) {
+          throw new Error('Company data is null or invalid')
+        }
+        
+        setCompany(normalized)
+        setError('')
       } catch (err) {
         if (!mounted) return
+        console.error('Error fetching company:', err)
         setCompany(null)
-        setError('Không tải được thông tin công ty.')
+        setError(err?.message || 'Không tải được thông tin công ty.')
       } finally {
         if (mounted) setLoading(false)
       }

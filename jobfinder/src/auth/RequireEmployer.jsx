@@ -1,12 +1,17 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { isEmployer } from './auth.js'
+import { isEmployer, getRole } from './auth.js'
 
 export default function RequireEmployer({ children }){
   const location = useLocation()
-  if(!isEmployer()){
+  const role = getRole()
+  console.log('RequireEmployer check:', { role, pathname: location.pathname })
+  // Accept both 'employer' and 'recruiter' roles
+  if(role !== 'employer' && role !== 'recruiter'){
+    console.log('RequireEmployer: Redirecting to login, role is:', role)
     const redirect = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/login?role=employer&redirect=${redirect}`} replace />
   }
+  console.log('RequireEmployer: Allowing access')
   return children
 }
 

@@ -1,13 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { JobService } from '../lib/api'
+import { JobService, SavedJobsService } from '../lib/api.js'
+import { getRole, getAuthToken } from '../auth/auth.js'
+import ApplyDrawer from '../components/jobs/ApplyDrawer.jsx'
 import './JobDetailsPage.css'
 
 const EXPERIENCE_LABELS = {
   any: 'Bất kỳ',
-  junior: 'Junior',
-  mid: 'Mid',
-  senior: 'Senior'
+  0: 'Bất kỳ',
+  1: '1 năm',
+  2: '2 năm',
+  3: '3 năm',
+  4: '4 năm',
+  5: '5+ năm',
+  junior: '1 năm',
+  mid: '2 năm',
+  senior: '3+ năm'
 }
 
 const JOB_TYPE_LABELS = {
@@ -165,13 +173,13 @@ const formatDate = (value) => {
 }
 
 const statusLabel = (status) => {
-  const map = { open: 'Đang tuyển', closed: 'Đã đóng', draft: 'Nháp', paused: 'Tạm dừng' }
+  const map = { open: 'Đang tuyển', approved: 'Đang tuyển', active: 'Đang tuyển', closed: 'Đã đóng', draft: 'Nháp', paused: 'Tạm dừng' }
   return map[status?.toLowerCase()] || (status ? status : 'Đang tuyển')
 }
 
 const statusClass = (status) => {
   const normalized = status?.toLowerCase()
-  if (normalized === 'open') return 'status-open'
+  if (normalized === 'open' || normalized === 'approved' || normalized === 'active') return 'status-open'
   if (normalized === 'closed') return 'status-closed'
   if (normalized === 'paused') return 'status-paused'
   return 'status-default'
@@ -199,19 +207,43 @@ const normalizeJob = (payload) => {
         }
       : null)
 
-  const companyId = raw.companyId || raw.company_id || raw.company?.id
-
+  // Handle company - backend returns 'companies' (plural) object
+  // Get company_id from multiple possible sources
+  const companyId = raw.company_id || raw.companyId || raw.companies?.id || raw.company?.id
+  
   const company =
-    raw.company && typeof raw.company === 'object'
-      ? { id: companyId || raw.company.id, ...raw.company }
+    raw.companies && typeof raw.companies === 'object'
+      ? {
+          ...raw.companies,
+          // Ensure id is always set, prioritize from companies object itself
+          id: raw.companies.id || companyId,
+          name: raw.companies.name,
+          logoUrl: raw.companies.logo_url || raw.companies.logoUrl,
+          description: raw.companies.description
+        }
+      : raw.company && typeof raw.company === 'object'
+      ? { 
+          ...raw.company,
+          // Ensure id is always set
+          id: raw.company.id || companyId,
+          logoUrl: raw.company.logo_url || raw.company.logoUrl
+        }
       : raw.companyName
       ? { id: companyId, name: raw.companyName, logoUrl: raw.companyLogoUrl }
       : raw.company
       ? { id: companyId, name: raw.company }
       : null
 
+  // Handle location - backend returns 'locations' (plural) object
   const location =
-    typeof raw.location === 'string'
+    raw.locations && typeof raw.locations === 'object'
+      ? {
+          id: raw.locations.id,
+          name: raw.locations.name,
+          type: raw.locations.type,
+          ...raw.locations
+        }
+      : typeof raw.location === 'string'
       ? { name: raw.location }
       : raw.location && typeof raw.location === 'object'
       ? raw.location
@@ -219,13 +251,104 @@ const normalizeJob = (payload) => {
       ? { name: raw.locationName }
       : null
 
+  // Handle work arrangements - backend returns 'job_work_arrangements' object
+  const workArrangement =
+    raw.job_work_arrangements && typeof raw.job_work_arrangements === 'object'
+      ? {
+          isRemoteAllowed: raw.job_work_arrangements.is_remote_allowed,
+          remotePercentage: raw.job_work_arrangements.remote_percentage,
+          flexibleHours: raw.job_work_arrangements.flexible_hours,
+          travelRequirement: raw.job_work_arrangements.travel_requirement,
+          overtimeExpected: raw.job_work_arrangements.overtime_expected,
+          shiftType: raw.job_work_arrangements.shift_type
+        }
+      : raw.workArrangement || raw.work_arrangement || raw.workSetting
+
+  // Handle requirements - backend returns 'job_requirements' array
+  const requirements =
+    Array.isArray(raw.job_requirements)
+      ? raw.job_requirements.map((req) => ({
+          title: req.title,
+          description: req.description,
+          isRequired: req.is_required,
+          requirementType: req.requirement_type,
+          level: req.level,
+          yearsExperience: req.years_experience
+        }))
+      : raw.requirements || []
+
+  // Handle benefits - backend returns 'job_benefits' array
+  const benefits =
+    Array.isArray(raw.job_benefits)
+      ? raw.job_benefits.map((ben) => ({
+          title: ben.title,
+          description: ben.description,
+          benefitType: ben.benefit_type,
+          valueAmount: ben.value_amount,
+          valueCurrency: ben.value_currency
+        }))
+      : raw.benefits || []
+
+  // Handle skills - backend returns 'job_skills' array with nested 'skills'
+  const skills =
+    Array.isArray(raw.job_skills)
+      ? raw.job_skills.map((js) => js.skills?.name).filter(Boolean)
+      : raw.skills || []
+
+  // Handle tags - backend returns 'job_tags' array with nested 'tags'
+  const tags =
+    Array.isArray(raw.job_tags)
+      ? raw.job_tags.map((jt) => jt.tags?.name).filter(Boolean)
+      : raw.tags || []
+
+  // Handle stats from _count
+  const stats = raw._count
+    ? {
+        views: raw._count.job_views || 0,
+        applicants: raw._count.applications || 0,
+        saved: raw._count.saved_jobs || 0
+      }
+    : raw.stats || { views: 0, applicants: 0, saved: 0 }
+
+  // Map all job fields
   return {
-    ...raw,
+    // Core job fields
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    jobType: raw.job_type || raw.jobType,
+    experienceLevel: raw.experience_level !== undefined ? raw.experience_level : raw.experienceLevel,
+    status: raw.status,
+    metadata: raw.metadata,
+    version: raw.version,
+    
+    // Dates - backend uses snake_case
+    postedAt: raw.posted_at || raw.postedAt,
+    expiresAt: raw.expires_at || raw.expiresAt,
+    createdAt: raw.created_at || raw.createdAt,
+    updatedAt: raw.updated_at || raw.updatedAt,
+    
+    // Salary
     salaryRange,
+    
+    // Relations
     company,
     location,
-    workArrangement: raw.workArrangement || raw.work_arrangement || raw.workSetting,
-    companyId: companyId || raw.companyId || raw.company_id
+    workArrangement,
+    requirements,
+    benefits,
+    skills,
+    tags,
+    
+    // Stats
+    stats,
+    
+    // IDs
+    companyId: companyId || raw.companyId || raw.company_id,
+    locationId: raw.location_id || raw.locationId,
+    
+    // Keep all other fields from raw
+    ...raw
   }
 }
 
@@ -236,18 +359,34 @@ export default function JobDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [checkingSaved, setCheckingSaved] = useState(false)
   const [highlightCompany, setHighlightCompany] = useState(false)
+  const [showApply, setShowApply] = useState(false)
   const companySectionRef = useRef(null)
   const highlightTimer = useRef(null)
+  const viewTrackedRef = useRef(false)
+  const role = getRole()
+  const isSeeker = role === 'seeker'
 
   const fetchJob = useCallback(async () => {
     setLoading(true)
     setError('')
+    viewTrackedRef.current = false // Reset tracking when fetching new job
     try {
       const data = await JobService.detail(id)
       const normalized = normalizeJob(data)
       if (!normalized) throw new Error('Không tìm thấy tin tuyển dụng')
       setJob(normalized)
+      
+      // Track view after successful load (fire and forget)
+      if (!viewTrackedRef.current && id) {
+        viewTrackedRef.current = true
+        JobService.trackView(id).catch((err) => {
+          // Silently fail - tracking is not critical
+          console.warn('Failed to track job view:', err)
+        })
+      }
     } catch (err) {
       const fallback = normalizeJob(SAMPLE_JOB_DETAILS[id])
       if (fallback) {
@@ -266,13 +405,47 @@ export default function JobDetailsPage() {
     fetchJob()
   }, [fetchJob])
 
+  // Check if job is saved when component mounts and user is seeker with valid token
+  useEffect(() => {
+    // Only check if user is seeker, has auth token, job is loaded, and we have job id
+    const hasToken = !!getAuthToken()
+    if (!isSeeker || !hasToken || !id || loading) {
+      setSaved(false)
+      setCheckingSaved(false)
+      return
+    }
+
+    const checkSavedStatus = async () => {
+      setCheckingSaved(true)
+      try {
+        const response = await SavedJobsService.check(id)
+        const isSaved = response?.data?.saved ?? response?.saved ?? false
+        setSaved(isSaved)
+      } catch (err) {
+        // If 401, user not authenticated or token expired - silently fail
+        if (err?.status === 401) {
+          // Token might be expired, don't show error
+          setSaved(false)
+        } else {
+          console.warn('Failed to check saved status:', err)
+          setSaved(false)
+        }
+      } finally {
+        setCheckingSaved(false)
+      }
+    }
+
+    checkSavedStatus()
+  }, [id, isSeeker, loading])
+
   useEffect(() => {
     return () => {
       if (highlightTimer.current) clearTimeout(highlightTimer.current)
     }
   }, [])
 
-  const isOpen = (job?.status || '').toLowerCase() === 'open'
+  const statusNormalized = (job?.status || '').toLowerCase()
+  const isOpen = statusNormalized === 'open' || statusNormalized === 'approved' || statusNormalized === 'active'
   const mustHave = useMemo(() => (job?.requirements || []).filter((req) => req?.isRequired), [job])
   const niceToHave = useMemo(() => (job?.requirements || []).filter((req) => !req?.isRequired), [job])
   const salaryText = formatSalary(job?.salaryRange)
@@ -300,9 +473,65 @@ export default function JobDetailsPage() {
     }
   }
 
+  const handleSave = async () => {
+    if (!isSeeker) {
+      navigate('/login?role=seeker&redirect=' + encodeURIComponent(window.location.pathname))
+      return
+    }
+
+    if (!id) return
+
+    setSaving(true)
+    try {
+      await SavedJobsService.save(id)
+      setSaved(true)
+    } catch (err) {
+      if (err?.status === 401) {
+        navigate('/login?role=seeker&redirect=' + encodeURIComponent(window.location.pathname))
+      } else {
+        alert(err?.message || 'Không thể lưu tin tuyển dụng. Vui lòng thử lại.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUnsave = async () => {
+    if (!isSeeker || !id) return
+
+    setSaving(true)
+    try {
+      await SavedJobsService.unsave(id)
+      setSaved(false)
+    } catch (err) {
+      if (err?.status === 401) {
+        navigate('/login?role=seeker&redirect=' + encodeURIComponent(window.location.pathname))
+      } else {
+        alert(err?.message || 'Không thể bỏ lưu tin tuyển dụng. Vui lòng thử lại.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveToggle = () => {
+    if (saved) {
+      handleUnsave()
+    } else {
+      handleSave()
+    }
+  }
+
   const handleApply = () => {
-    if (!isOpen) return
-    alert('Luồng ứng tuyển chưa được kết nối.')
+    if (!isOpen) {
+      alert('Tin tuyển dụng đã đóng.')
+      return
+    }
+    if (!isSeeker) {
+      navigate('/login?role=seeker&redirect=' + encodeURIComponent(window.location.pathname))
+      return
+    }
+    setShowApply(true)
   }
 
   const handleViewCompany = () => {
@@ -314,8 +543,16 @@ export default function JobDetailsPage() {
   }
 
   const handleOpenCompany = () => {
-    const companyId = job?.company?.id || job?.companyId || job?.company_id
+    // Try multiple sources to get company ID
+    const companyId = 
+      job?.company?.id || 
+      job?.companies?.id ||
+      job?.companyId || 
+      job?.company_id ||
+      job?.company?.companies?.id
+    
     if (!companyId) {
+      console.warn('Company ID not found in job data:', job)
       alert('Chưa có thông tin công ty.')
       return
     }
@@ -382,9 +619,15 @@ export default function JobDetailsPage() {
             <button className="btn primary" onClick={handleApply} disabled={!isOpen}>
               Ứng tuyển ngay
             </button>
-            <button className="btn ghost" onClick={() => setSaved((s) => !s)}>
-              {saved ? 'Đã lưu' : 'Lưu tin'}
-            </button>
+            {isSeeker && (
+              <button 
+                className="btn ghost" 
+                onClick={handleSaveToggle}
+                disabled={saving || checkingSaved}
+              >
+                {saving ? 'Đang xử lý...' : checkingSaved ? 'Đang kiểm tra...' : saved ? 'Đã lưu' : 'Lưu tin'}
+              </button>
+            )}
             <button className="btn ghost" onClick={handleShare}>
               Chia sẻ
             </button>
@@ -642,6 +885,17 @@ export default function JobDetailsPage() {
           </aside>
         </div>
       </div>
+
+      <ApplyDrawer
+        open={showApply}
+        onClose={() => setShowApply(false)}
+        jobId={job?.id}
+        jobTitle={job?.title}
+        onSubmitted={() => {
+          setShowApply(false)
+          navigate('/applications')
+        }}
+      />
     </div>
   )
 }

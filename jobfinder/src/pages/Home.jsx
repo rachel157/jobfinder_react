@@ -8,6 +8,8 @@ import Carousel from '../components/Carousel.jsx'
 import { chips, categories, jobs, partners } from '../data/mock.js'
 import { getRole } from '../auth/auth.js'
 import { companyApi } from '../services/companyApi'
+import { JobService } from '../lib/api.js'
+import { mapJobData } from './Jobs.jsx'
 
 const employerHighlights = [
   { title: 'Đăng tin không giới hạn', desc: 'Tạo landing tuyển dụng và xuất bản chỉ trong 2 phút.' },
@@ -45,13 +47,19 @@ export default function Home() {
   const [kw, setKw] = useState('')
   const [loc, setLoc] = useState('')
   const [heroTab, setHeroTab] = useState('jobs')
+  const [featuredJobs, setFeaturedJobs] = useState([])
+  const [loadingFeatured, setLoadingFeatured] = useState(false)
+  const [errorFeatured, setErrorFeatured] = useState('')
   const navigate = useNavigate()
   const connectedCount = connectedRecruiters.length
 
   // Nếu là nhà tuyển dụng, chuyển sang khu vực recruiter
+  // CHỈ redirect khi đang ở trang Home (pathname === '/')
   useEffect(() => {
     const role = getRole()
-    if (role === 'employer') {
+    const currentPath = window.location.pathname
+    // Chỉ redirect khi đang ở trang chủ, không redirect khi đang ở các trang khác
+    if (role === 'employer' && currentPath === '/') {
       let active = true
       const moveRecruiter = async () => {
         try {
@@ -68,6 +76,29 @@ export default function Home() {
     }
     return undefined
   }, [navigate])
+
+  // Fetch featured jobs
+  useEffect(() => {
+    const fetchFeaturedJobs = async () => {
+      setLoadingFeatured(true)
+      setErrorFeatured('')
+      try {
+        const response = await JobService.featured()
+        // Handle response format: { message, data } or { data }
+        const jobsList = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : [])
+        const mappedJobs = jobsList.map(mapJobData)
+        setFeaturedJobs(mappedJobs)
+      } catch (err) {
+        console.error('Error fetching featured jobs:', err)
+        setErrorFeatured(err?.message || 'Không thể tải việc làm nổi bật')
+        // Fallback to mock data on error
+        setFeaturedJobs(jobs.slice(0, 6))
+      } finally {
+        setLoadingFeatured(false)
+      }
+    }
+    fetchFeaturedJobs()
+  }, [])
 
   const suggestions = useMemo(() => {
     const q = kw.trim().toLowerCase()
@@ -245,11 +276,25 @@ export default function Home() {
             Tìm thêm việc làm
           </Link>
         </header>
-        <div className="home-grid home-grid--jobs">
-          {jobs.slice(0, 6).map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
-        </div>
+        {loadingFeatured ? (
+          <div className="home-grid home-grid--jobs">
+            <p className="muted">Đang tải việc làm nổi bật...</p>
+          </div>
+        ) : errorFeatured && featuredJobs.length === 0 ? (
+          <div className="home-grid home-grid--jobs">
+            <p className="muted">{errorFeatured}</p>
+          </div>
+        ) : (
+          <div className="home-grid home-grid--jobs">
+            {featuredJobs.length > 0 ? (
+              featuredJobs.map((job) => (
+                <JobCard key={job.id} job={job} />
+              ))
+            ) : (
+              <p className="muted">Chưa có việc làm nổi bật.</p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="home-connection-section">

@@ -114,6 +114,9 @@ export default function ResumeCard({ resume, onSetDefault, onDelete }) {
     }
   }
 
+  const currentResume = resumeWithContent || resume
+  const isFileResume = currentResume?.source_type === 'uploaded' && !!currentResume?.file_url
+
   return (
     <div className="resume-card">
       <div className="resume-card__content">
@@ -207,13 +210,13 @@ export default function ResumeCard({ resume, onSetDefault, onDelete }) {
                 className="resume-card__dropdown-item"
                 onClick={async () => {
                   setMenuOpen(false)
-                  // Nếu resume không có content, cần load detail trước
-                  if (!resumeWithContent.content) {
-                  try {
+                  // Nếu là CV upload file, chỉ cần mở modal xem PDF
+                  if (!isFileResume && !resumeWithContent.content) {
+                    try {
                       const { ResumeApi } = await import('../../services/resumeApi')
                       const detail = await ResumeApi.getResumeById(resume.id)
                       setResumeWithContent(detail)
-                  } catch (err) {
+                    } catch (err) {
                       console.error('Failed to load resume detail:', err)
                       setResumeWithContent(resume) // Fallback to original
                     }
@@ -255,15 +258,23 @@ export default function ResumeCard({ resume, onSetDefault, onDelete }) {
             </div>
           </div>
           <div className="resume-preview-modal__body">
-            {(resumeWithContent || resume) && (
-              <CVPreview
-                profileData={getProfileDataForPreview()}
-                theme={(resumeWithContent || resume).content?.layout_settings?.theme || 'professional'}
-                title={(resumeWithContent || resume).title}
-                onClose={() => setPreviewOpen(false)}
-                hideHeader={true}
-                additionalData={getAdditionalDataForPreview()}
-              />
+            {currentResume && (
+              isFileResume && currentResume.file_url ? (
+                <iframe
+                  src={currentResume.file_url}
+                  title={currentResume.title || 'CV'}
+                  style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '12px' }}
+                />
+              ) : (
+                <CVPreview
+                  profileData={getProfileDataForPreview()}
+                  theme={currentResume.content?.layout_settings?.theme || 'professional'}
+                  title={currentResume.title}
+                  onClose={() => setPreviewOpen(false)}
+                  hideHeader={true}
+                  additionalData={getAdditionalDataForPreview()}
+                />
+              )
             )}
           </div>
         </div>

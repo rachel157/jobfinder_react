@@ -1,8 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation, useNavigate, Link } from "react-router-dom"
 import { AuthClient } from "../services/authClient"
 import { getAuthUser, getRefreshToken, logout as clearAuth } from "../auth/auth"
 import { companyApi } from "../services/companyApi"
+import { JobService, ApplicationService } from "../lib/api.js"
 import "./recruiter-dashboard.css"
 
 // Keep in sync with RecruiterCompanyPage to avoid mismatched completion %
@@ -50,19 +51,14 @@ const computeProfileCompletion = (company, details) => {
 }
 
 const navItems = [
-  { label: "Bảng điều khiển", icon: "[DB]", path: "/recruiter/dashboard" },
-  { label: "Tin tuyển dụng", icon: "[JD]", path: "/post-job" },
-  { label: "Ứng viên", icon: "[UV]", path: "/recruiter/dashboard" },
-  { label: "Talent pool", icon: "[TP]", path: "/recruiter/dashboard" },
-  { label: "Hồ sơ công ty", icon: "[CT]", path: "/recruiter/company" },
+  { label: "Bảng điều khiển", icon: "", path: "/recruiter/dashboard" },
+  { label: "Tin tuyển dụng", icon: "", path: "/recruiter/jobs" },
+  { label: "Ứng viên", icon: "", path: "/recruiter/dashboard" },
+  { label: "Talent pool", icon: "", path: "/recruiter/dashboard" },
+  { label: "Hồ sơ công ty", icon: "", path: "/recruiter/company" },
 ]
 
-const statCards = [
-  { label: "Tin đang hoạt động", value: 8, trend: "+12%", direction: "up" },
-  { label: "Tin nháp", value: 3, trend: "-5%", direction: "down" },
-  { label: "Ứng tuyển đang mở", value: 128, trend: "+4%", direction: "up" },
-  { label: "Offer chấp nhận (30 ngày)", value: 6, trend: "+2%", direction: "up" },
-]
+// statCards will be computed from API data
 
 const pipelineStatuses = [
   { key: "pending", label: "Đang chờ" },
@@ -71,26 +67,15 @@ const pipelineStatuses = [
   { key: "rejected", label: "Từ chối" },
 ]
 
-const pipelineItems = [
-  { name: "Trần Lệ Ngân", job: "Product Designer", status: "pending", appliedAt: "2 ngày trước" },
-  { name: "Đỗ Minh Hoàng", job: "Frontend Engineer", status: "pending", appliedAt: "1 ngày trước" },
-  { name: "Nguyễn Phúc Thịnh", job: "QA Engineer", status: "reviewed", appliedAt: "3 ngày trước" },
-  { name: "Lê Sương Giang", job: "Backend Engineer", status: "accepted", appliedAt: "5 ngày trước" },
-  { name: "Trần Tường Vy", job: "Product Manager", status: "rejected", appliedAt: "1 tuần trước" },
-]
+const STATUS_LABELS = {
+  pending: "Đang chờ",
+  reviewed: "Đã xem",
+  accepted: "Chấp nhận",
+  rejected: "Từ chối",
+  withdrawn: "Đã rút",
+}
 
-const recentApplications = [
-  { id: 1, candidate: "Lê Hồng Phúc", job: "Senior Backend Engineer", status: "Đã xem", stage: "Phỏng vấn kỹ thuật", applied: "12/07/2025" },
-  { id: 2, candidate: "Đào Thùy Dương", job: "UI/UX Designer", status: "Đang chờ", stage: "Sàng lọc", applied: "11/07/2025" },
-  { id: 3, candidate: "Phan Phúc Long", job: "DevOps Engineer", status: "Chấp nhận", stage: "Offer", applied: "10/07/2025" },
-  { id: 4, candidate: "Đặng Mỹ Tiên", job: "Mobile Engineer", status: "Từ chối", stage: "Gọi điện", applied: "09/07/2025" },
-]
-
-const jobRows = [
-  { id: 1, title: "Senior Backend Engineer", status: "Đã duyệt", type: "Toàn thời gian", location: "Hồ Chí Minh", posted: "01/07/2025", expires: "01/09/2025", applications: 48, views: 820 },
-  { id: 2, title: "Product Designer", status: "Nháp", type: "Hybrid", location: "Remote", posted: "--", expires: "--", applications: 0, views: 0 },
-  { id: 3, title: "QA Engineer", status: "Đã duyệt", type: "Onsite", location: "Hà Nội", posted: "25/06/2025", expires: "25/08/2025", applications: 23, views: 405 },
-]
+// jobRows, pipeline, recent applications sẽ load từ API
 
 const topCandidates = [
   { name: "Tạ Hồng Ngọc", role: "Product Design Lead", looking: true, skills: ["Figma", "Research", "Illustrator"], applications: 2, latestStatus: "Đã xem" },
@@ -103,6 +88,21 @@ const savedCandidates = [
   { name: "Đặng Quốc Huy", role: "Data Engineer", savedJob: "Data Engineer", skills: ["Airflow", "Python", "Snowflake"] },
 ]
 
+function formatDate(value) {
+  if (!value) return "--"
+  try {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "--"
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+  } catch {
+    return "--"
+  }
+}
+
 export default function RecruiterDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -110,14 +110,38 @@ export default function RecruiterDashboard() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [company, setCompany] = useState(null)
   const [details, setDetails] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [selectedJobId, setSelectedJobId] = useState("")
+  const [applications, setApplications] = useState([])
+  const [applicationsLoading, setApplicationsLoading] = useState(false)
+  const [stats, setStats] = useState({
+    active: 0,
+    draft: 0,
+    totalApplications: 0,
+    totalOffers: 0
+  })
 
   const pipelineBuckets = useMemo(
     () =>
       pipelineStatuses.reduce((acc, status) => {
-        acc[status.key] = pipelineItems.filter((item) => item.status === status.key)
+        acc[status.key] = applications.filter((app) => app.status === status.key)
         return acc
       }, {}),
-    []
+    [applications]
+  )
+
+  const recentApplications = useMemo(
+    () =>
+      applications
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.applied_at || 0).getTime() -
+            new Date(a.applied_at || 0).getTime()
+        )
+        .slice(0, 5),
+    [applications]
   )
 
   const authUser = getAuthUser() || {}
@@ -142,6 +166,84 @@ export default function RecruiterDashboard() {
       active = false
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+    const loadJobs = async () => {
+      setJobsLoading(true)
+      try {
+        const response = await JobService.myJobs({ page: 1, limit: 100 })
+        const jobsData = response?.data || response || []
+        if (active) {
+          setJobs(jobsData)
+
+          // Job đầu tiên cho pipeline mặc định
+          if (jobsData.length > 0 && !selectedJobId) {
+            setSelectedJobId(jobsData[0].id)
+          }
+
+          // Calculate stats
+          const activeCount = jobsData.filter((j) => j.status === "approved").length
+          const draftCount = jobsData.filter((j) => j.status === "draft").length
+          const totalApplications = jobsData.reduce(
+            (sum, j) => sum + (j._count?.applications || j.applications_count || 0),
+            0
+          )
+
+          setStats({
+            active: activeCount,
+            draft: draftCount,
+            totalApplications: totalApplications,
+            totalOffers: 0, // TODO: Calculate from applications data when available
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load jobs:', err)
+      } finally {
+        if (active) setJobsLoading(false)
+      }
+    }
+    loadJobs()
+    return () => {
+      active = false
+    }
+  }, [selectedJobId])
+
+  // Load danh sách ứng viên cho job được chọn (pipeline + recent)
+  useEffect(() => {
+    if (!selectedJobId) {
+      setApplications([])
+      return
+    }
+
+    let active = true
+
+    const loadApplications = async () => {
+      setApplicationsLoading(true)
+      try {
+        const res = await ApplicationService.listByJob(selectedJobId, {
+          page: 1,
+          limit: 50,
+          sort_by: "applied_at",
+          order: "desc",
+        })
+        const payload = res?.data || res || {}
+        const list = payload.data || payload || []
+        if (active) setApplications(list)
+      } catch (err) {
+        console.error("Failed to load applications for dashboard:", err)
+        if (active) setApplications([])
+      } finally {
+        if (active) setApplicationsLoading(false)
+      }
+    }
+
+    loadApplications()
+
+    return () => {
+      active = false
+    }
+  }, [selectedJobId])
 
   const completion = computeProfileCompletion(company, details)
   const completionPercent = completion.percent
@@ -286,21 +388,35 @@ export default function RecruiterDashboard() {
                 </button>
               </div>
             </div>
-            <button className="rd-primary-btn" onClick={() => navigate("/post-job")}>
+            <Link 
+              to="/post-job"
+              className="rd-primary-btn" 
+              style={{ textDecoration: 'none', display: 'inline-block', cursor: 'pointer', position: 'relative', zIndex: 10, pointerEvents: 'auto' }}
+              onClick={(e) => {
+                console.log('Link clicked, navigating to /post-job')
+              }}
+            >
               Đăng tin mới
-            </button>
+            </Link>
           </section>
 
           <section className="rd-grid rd-grid--stats">
-            {statCards.map((stat) => (
-              <article key={stat.label} className="rd-card">
-                <p className="rd-label">{stat.label}</p>
-                <p className="rd-value">{stat.value}</p>
-                <p className={`rd-trend ${stat.direction === "up" ? "up" : "down"}`}>
-                  {stat.trend} so với kỳ trước
-                </p>
-              </article>
-            ))}
+            <article className="rd-card">
+              <p className="rd-label">Tin đang hoạt động</p>
+              <p className="rd-value">{jobsLoading ? '...' : stats.active}</p>
+            </article>
+            <article className="rd-card">
+              <p className="rd-label">Tin nháp</p>
+              <p className="rd-value">{jobsLoading ? '...' : stats.draft}</p>
+            </article>
+            <article className="rd-card">
+              <p className="rd-label">Ứng tuyển đang mở</p>
+              <p className="rd-value">{jobsLoading ? '...' : stats.totalApplications}</p>
+            </article>
+            <article className="rd-card">
+              <p className="rd-label">Offer chấp nhận (30 ngày)</p>
+              <p className="rd-value">{jobsLoading ? '...' : stats.totalOffers}</p>
+            </article>
           </section>
 
           <section className="rd-card">
@@ -310,17 +426,20 @@ export default function RecruiterDashboard() {
                 <p className="rd-muted">Theo dõi trạng thái ứng viên theo từng giai đoạn.</p>
               </div>
               <div className="rd-filters">
-                <select>
-                  <option>Tất cả công việc</option>
-                  <option>Backend Engineer</option>
-                  <option>Product Designer</option>
+                <select
+                  value={selectedJobId}
+                  onChange={(e) => setSelectedJobId(e.target.value)}
+                >
+                  {jobs.map((job) => (
+                    <option key={job.id} value={job.id}>
+                      {job.title}
+                    </option>
+                  ))}
                 </select>
-                <select>
+                <select disabled>
                   <option>Tất cả trạng thái</option>
-                  <option>Đang chờ</option>
-                  <option>Đã xem</option>
                 </select>
-                <input type="date" />
+                <input type="date" disabled />
               </div>
             </div>
 
@@ -332,12 +451,20 @@ export default function RecruiterDashboard() {
                     <strong>{pipelineBuckets[status.key]?.length ?? 0}</strong>
                   </div>
                   <div className="rd-column__body">
-                    {pipelineBuckets[status.key]?.length ? (
-                      pipelineBuckets[status.key].map((candidate) => (
-                        <div key={`${candidate.name}-${status.key}`} className="rd-pill-card">
-                          <p className="rd-pill-card__title">{candidate.name}</p>
-                          <p className="rd-muted">{candidate.job}</p>
-                          <small>{candidate.appliedAt}</small>
+                    {applicationsLoading ? (
+                      <p className="rd-empty">Đang tải...</p>
+                    ) : pipelineBuckets[status.key]?.length ? (
+                      pipelineBuckets[status.key].map((app) => (
+                        <div key={app.id} className="rd-pill-card">
+                          <p className="rd-pill-card__title">
+                            {app.candidate?.full_name || "Chưa có tên"}
+                          </p>
+                          <p className="rd-muted">
+                            {app.candidate?.headline ||
+                              app.job_title ||
+                              "Ứng viên ứng tuyển"}
+                          </p>
+                          <small>{formatDate(app.applied_at)}</small>
                         </div>
                       ))
                     ) : (
@@ -362,20 +489,44 @@ export default function RecruiterDashboard() {
                   <span>Giai đoạn</span>
                   <span>Hành động</span>
                 </div>
-                {recentApplications.map((row) => (
-                  <div className="rd-table__row" key={row.id}>
-                    <span>{row.candidate}</span>
-                    <span>{row.job}</span>
-                    <span className="rd-status">{row.status}</span>
-                    <span>{row.applied}</span>
-                    <span>{row.stage}</span>
-                    <span className="rd-row-actions">
-                      <button>Xem</button>
-                      <button>Chuyển bước</button>
-                      <button className="danger">Từ chối</button>
+                {applicationsLoading ? (
+                  <div className="rd-table__row">
+                    <span style={{ gridColumn: "1 / -1", textAlign: "center" }}>
+                      Đang tải...
                     </span>
                   </div>
-                ))}
+                ) : recentApplications.length === 0 ? (
+                  <div className="rd-table__row">
+                    <span style={{ gridColumn: "1 / -1", textAlign: "center" }}>
+                      Chưa có ứng viên.
+                    </span>
+                  </div>
+                ) : (
+                  recentApplications.map((app) => (
+                    <div className="rd-table__row" key={app.id}>
+                      <span>{app.candidate?.full_name || "Chưa có tên"}</span>
+                      <span>
+                        {app.job_title ||
+                          jobs.find((j) => j.id === app.job_id)?.title ||
+                          "--"}
+                      </span>
+                      <span className="rd-status">
+                        {STATUS_LABELS[app.status] || app.status}
+                      </span>
+                      <span>{formatDate(app.applied_at)}</span>
+                      <span>{app.current_stage?.stage_name || "--"}</span>
+                      <span className="rd-row-actions">
+                        <button
+                          onClick={() =>
+                            navigate(`/recruiter/applications/${app.id}`)
+                          }
+                        >
+                          Xem
+                        </button>
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </section>
@@ -405,26 +556,45 @@ export default function RecruiterDashboard() {
                 <span>Lượt xem</span>
                 <span>Hành động</span>
               </div>
-              {jobRows.map((job) => {
-                const statusClass = job.status === "Đã duyệt" ? "success" : job.status === "Nháp" ? "warning" : "info"
-                return (
-                  <div className="rd-table__row" key={job.id}>
-                    <span>{job.title}</span>
-                    <span className={`rd-status ${statusClass}`}>{job.status}</span>
-                    <span>{job.type}</span>
-                    <span>{job.location}</span>
-                    <span>{job.posted}</span>
-                    <span>{job.expires}</span>
-                    <span>{job.applications}</span>
-                    <span>{job.views}</span>
-                    <span className="rd-manage-cell">
-                      <button className="rd-secondary-btn" onClick={() => navigate("/recruiter/company")}>
-                        Hồ sơ công ty
-                      </button>
-                    </span>
-                  </div>
-                )
-              })}
+              {jobsLoading ? (
+                <div className="rd-table__row">
+                  <span colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Đang tải...</span>
+                </div>
+              ) : jobs.length === 0 ? (
+                <div className="rd-table__row">
+                  <span colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Chưa có tin tuyển dụng nào.</span>
+                </div>
+              ) : (
+                jobs.slice(0, 5).map((job) => {
+                  const status = job.status || 'draft'
+                  const statusLabel = status === 'approved' ? 'Đã duyệt' : status === 'draft' ? 'Nháp' : 'Đã đóng'
+                  const statusClass = status === "approved" ? "success" : status === "draft" ? "warning" : "info"
+                  const jobType = job.job_type === 'full_time' ? 'Toàn thời gian' : job.job_type === 'part_time' ? 'Bán thời gian' : 'Hợp đồng'
+                  const location = job.locations?.name || job.location?.name || '--'
+                  const posted = job.posted_at ? new Date(job.posted_at).toLocaleDateString('vi-VN') : '--'
+                  const expires = job.expires_at ? new Date(job.expires_at).toLocaleDateString('vi-VN') : '--'
+                  const applications = job._count?.applications || job.applications_count || 0
+                  const views = job._count?.views || job.views_count || 0
+                  
+                  return (
+                    <div className="rd-table__row" key={job.id}>
+                      <span>{job.title || 'Chưa có tiêu đề'}</span>
+                      <span className={`rd-status ${statusClass}`}>{statusLabel}</span>
+                      <span>{jobType}</span>
+                      <span>{location}</span>
+                      <span>{posted}</span>
+                      <span>{expires}</span>
+                      <span>{applications}</span>
+                      <span>{views}</span>
+                      <span className="rd-manage-cell">
+                        <button className="rd-secondary-btn" onClick={() => navigate(`/recruiter/jobs/${job.id}/manage`)}>
+                          Quản lý
+                        </button>
+                      </span>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </section>
 

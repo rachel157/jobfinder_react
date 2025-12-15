@@ -1,3 +1,18 @@
+.resume-step-indicator{margin-bottom:32px; padding-bottom:24px; border-bottom:1px solid rgba(15,23,42,.08)}
+.resume-step-indicator__progress{position:relative; width:100%; height:4px; background:#e2e8f0; border-radius:999px; margin-bottom:32px; overflow:hidden}
+.resume-step-indicator__progress-bar{height:100%; background:linear-gradient(90deg,#2563eb,#0ea5e9); border-radius:999px; transition:width .4s ease}
+.resume-step-indicator__steps{display:flex; justify-content:space-between; position:relative}
+.resume-step-indicator__step{display:flex; flex-direction:column; align-items:center; gap:8px; flex:1; position:relative; z-index:1}
+.resume-step-indicator__step::before{content:''; position:absolute; top:20px; left:50%; right:-50%; height:2px; background:#e2e8f0; z-index:0}
+.resume-step-indicator__step:last-child::before{display:none}
+.resume-step-indicator__step--completed::before{background:#2563eb}
+.resume-step-indicator__step-number{width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#e2e8f0; color:#64748b; font-weight:700; font-size:16px; transition:all .3s; position:relative; z-index:2; border:3px solid #fff}
+.resume-step-indicator__step--active .resume-step-indicator__step-number{background:#2563eb; color:#fff; box-shadow:0 4px 12px rgba(37,99,235,.3); transform:scale(1.1)}
+.resume-step-indicator__step--completed .resume-step-indicator__step-number{background:#10b981; color:#fff; border-color:#10b981}
+.resume-step-indicator__step--clickable{cursor:pointer}
+.resume-step-indicator__step-label{font-size:13px; font-weight:600; color:#64748b; text-align:center; transition:color .3s}
+.resume-step-indicator__step--active .resume-step-indicator__step-label{color:#2563eb; font-weight:700}
+.resume-step-indicator__step--completed .resume-step-indicator__step-label{color:#10b981}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

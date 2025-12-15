@@ -27,9 +27,26 @@ import CompanyDetailsPage from "./pages/CompanyDetailsPage.jsx"
 import ResumesList from "./pages/ResumesList.jsx"
 import ResumeCreate from "./pages/ResumeCreate.jsx"
 import ResumeDetail from "./pages/ResumeDetail.jsx"
+import SavedJobs from "./pages/SavedJobs.jsx"
+import MyApplications from "./pages/MyApplications.jsx"
+import MyApplicationDetail from "./pages/MyApplicationDetail.jsx"
+import MyJobs from "./pages/MyJobs.jsx"
+import JobManage from "./pages/JobManage.jsx"
+import ApplicationsList from "./pages/ApplicationsList.jsx"
+import ApplicationDetail from "./pages/ApplicationDetail.jsx"
+import RequireAdmin from "./auth/RequireAdmin.jsx"
+import AdminLayout from "./pages/admin/AdminLayout.jsx"
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx"
+import AdminUsersList from "./pages/admin/AdminUsersList.jsx"
+import AdminUserDetail from "./pages/admin/AdminUserDetail.jsx"
+import AdminJobsList from "./pages/admin/AdminJobsList.jsx"
+import AdminPendingJobs from "./pages/admin/AdminPendingJobs.jsx"
+import AdminJobDetail from "./pages/admin/AdminJobDetail.jsx"
+import AdminLogin from "./pages/admin/AdminLogin.jsx"
 import "./index.css"
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
   {
     path: '/',
     element: <App />,
@@ -73,6 +90,21 @@ const router = createBrowserRouter([
           <ResumeDetail />
         </RequireSeeker>
       ) },
+      { path: 'saved-jobs', element: (
+        <RequireSeeker>
+          <SavedJobs />
+        </RequireSeeker>
+      ) },
+      { path: 'applications', element: (
+        <RequireSeeker>
+          <MyApplications />
+        </RequireSeeker>
+      ) },
+      { path: 'applications/:id', element: (
+        <RequireSeeker>
+          <MyApplicationDetail />
+        </RequireSeeker>
+      ) },
       { path: 'post-job', element: (
         <RequireEmployer>
           <PostJob />
@@ -95,6 +127,26 @@ const router = createBrowserRouter([
           <RecruiterChangePassword />
         </RequireEmployer>
       ) },
+      { path: 'recruiter/jobs', element: (
+        <RequireEmployer>
+          <MyJobs />
+        </RequireEmployer>
+      ) },
+      { path: 'recruiter/jobs/:id/manage', element: (
+        <RequireEmployer>
+          <JobManage />
+        </RequireEmployer>
+      ) },
+      { path: 'recruiter/jobs/:jobId/applications', element: (
+        <RequireEmployer>
+          <ApplicationsList />
+        </RequireEmployer>
+      ) },
+      { path: 'recruiter/applications/:id', element: (
+        <RequireEmployer>
+          <ApplicationDetail />
+        </RequireEmployer>
+      ) },
       { path: 'onboarding/company', element: (
         <RequireEmployer>
           <CompanyOnboardingPage />
@@ -103,10 +155,33 @@ const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
     ],
   },
-])
+  {
+    path: '/admin/login',
+    element: <AdminLogin />,
+  },
+  {
+    path: '/admin',
+    element: (
+      <RequireAdmin>
+        <AdminLayout />
+      </RequireAdmin>
+    ),
+    children: [
+      { index: true, element: <AdminDashboard /> },
+      { path: 'dashboard', element: <AdminDashboard /> },
+      { path: 'users', element: <AdminUsersList /> },
+      { path: 'users/:id', element: <AdminUserDetail /> },
+      { path: 'jobs', element: <AdminJobsList /> },
+      { path: 'jobs/pending', element: <AdminPendingJobs /> },
+      { path: 'jobs/:id', element: <AdminJobDetail /> },
+    ],
+  },
+], {
+  future: {
+    v7_startTransition: true,
+  },
+})
 
 createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>
+  <RouterProvider router={router} />
 )

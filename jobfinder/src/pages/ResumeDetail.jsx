@@ -63,29 +63,38 @@ export default function ResumeDetail() {
     setError('')
     setSaveIndicator('')
     try {
-      const updatedContent = {
-        ...(resume.content || {}),
-        layout_settings: {
-          ...(resume.content?.layout_settings || {}),
-          theme: selectedTheme,
-          sections_order: sectionsOrder,
-        },
-        projects: projects,
-        languages: languages,
-        summary: summary,
-        references: references,
-      }
+      // Nếu là CV upload (PDF tĩnh) thì chỉ cho phép đổi tên và cài đặt
+      if (resume?.source_type === 'uploaded') {
+        await ResumeApi.updateResume(id, {
+          title: title.trim(),
+          is_public: isPublic,
+          status: status,
+        })
+      } else {
+        const updatedContent = {
+          ...(resume.content || {}),
+          layout_settings: {
+            ...(resume.content?.layout_settings || {}),
+            theme: selectedTheme,
+            sections_order: sectionsOrder,
+          },
+          projects: projects,
+          languages: languages,
+          summary: summary,
+          references: references,
+        }
 
-      await ResumeApi.updateResume(id, {
-        title: title.trim(),
-        content: updatedContent,
-        layout_settings: {
-          theme: selectedTheme,
-          sections_order: sectionsOrder,
-        },
-        is_public: isPublic,
-        status: status,
-      })
+        await ResumeApi.updateResume(id, {
+          title: title.trim(),
+          content: updatedContent,
+          layout_settings: {
+            theme: selectedTheme,
+            sections_order: sectionsOrder,
+          },
+          is_public: isPublic,
+          status: status,
+        })
+      }
       await loadResume()
       setSaveIndicator('Đã lưu thành công!')
       setTimeout(() => setSaveIndicator(''), 3000)
@@ -119,7 +128,7 @@ export default function ResumeDetail() {
 
   const handlePreview = async () => {
     // Đảm bảo resume data đã được load
-    if (!resume || !resume.content) {
+    if (!resume) {
       await loadResume()
     }
     setPreviewOpen(true)
@@ -259,6 +268,9 @@ export default function ResumeDetail() {
     )
   }
 
+  // Phân biệt CV upload (PDF) và CV tạo từ profile/builder
+  const isFileResume = resume?.source_type === 'uploaded' && !!resume?.file_url
+
   return (
     <section className="section resume-detail-page">
       {/* Sticky Header */}
@@ -299,19 +311,21 @@ export default function ResumeDetail() {
                   <circle cx="12" cy="12" r="3" />
                 </svg>
             </button>
-            <button
-              className="btn btn--icon"
-              onClick={() => handleExport('pdf')}
-              title="Export PDF"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-            </button>
+            {!isFileResume && (
+              <button
+                className="btn btn--icon"
+                onClick={() => handleExport('pdf')}
+                title="Export PDF"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </button>
+            )}
             {resume?.file_url && (
               <button
                 className="btn btn--icon"
@@ -414,26 +428,40 @@ export default function ResumeDetail() {
               </div>
             </div>
 
-            {/* Template Section */}
-            <div className="resume-detail-section">
-              <div className="resume-detail-section__header">
-                <div>
-                  <h3 className="resume-detail-section__title">Template</h3>
-                  <p className="resume-detail-section__description muted small">
-                    Chọn template cho CV của bạn
-                  </p>
+            {/* Nếu là CV upload (PDF tĩnh), không hiển thị builder chi tiết */}
+            {isFileResume ? (
+              <div className="resume-detail-section">
+                <div className="resume-detail-section__header">
+                  <div>
+                    <h3 className="resume-detail-section__title">CV dạng file PDF</h3>
+                    <p className="resume-detail-section__description muted small">
+                      CV này được tải lên từ file. Bạn chỉ có thể đổi tên và cài đặt hiển thị. Nếu muốn chỉnh sửa nội dung, hãy tạo CV mới từ hồ sơ.
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="resume-detail-section__body">
-                <TemplateGallery
-                  selectedTheme={selectedTheme}
-                  onSelectTheme={setSelectedTheme}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                {/* Template Section */}
+                <div className="resume-detail-section">
+                  <div className="resume-detail-section__header">
+                    <div>
+                      <h3 className="resume-detail-section__title">Template</h3>
+                      <p className="resume-detail-section__description muted small">
+                        Chọn template cho CV của bạn
+                      </p>
+                    </div>
+                  </div>
+                  <div className="resume-detail-section__body">
+                    <TemplateGallery
+                      selectedTheme={selectedTheme}
+                      onSelectTheme={setSelectedTheme}
+                    />
+                  </div>
+                </div>
 
-            {/* Additional Info Sections - align style with create page */}
-            <div className="additional-info-grid">
+                {/* Additional Info Sections - align style with create page */}
+                <div className="additional-info-grid">
               <div className="additional-info-card">
                 <div className="additional-info-card__header">
                   <div className="additional-info-card__icon">
@@ -510,9 +538,10 @@ export default function ResumeDetail() {
                 <div className="additional-info-card__body">
                   <ReferencesSection references={references} onChange={setReferences} />
                 </div>
-              </div>
             </div>
-
+            </div>
+            </>
+            )}
             {/* Actions */}
             <div className="resume-detail-form__actions">
               <button type="button" className="btn" onClick={() => navigate('/resumes')}>
@@ -610,14 +639,16 @@ export default function ResumeDetail() {
           <div className="resume-preview-modal__header">
             <h3 style={{ margin: 0 }}>Preview CV</h3>
             <div className="resume-preview-modal__actions">
-              <button className="btn btn--icon" onClick={() => handleExport('pdf')}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                </svg>
-              </button>
+              {!isFileResume && (
+                <button className="btn btn--icon" onClick={() => handleExport('pdf')}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                </button>
+              )}
               <button className="btn btn--icon" onClick={() => setPreviewOpen(false)}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -628,14 +659,22 @@ export default function ResumeDetail() {
           </div>
           <div className="resume-preview-modal__body">
             {resume ? (
-              <CVPreview
-                profileData={getProfileDataForPreview()}
-                theme={selectedTheme || resume.content?.layout_settings?.theme || 'professional'}
-                title={title || resume.title}
-                onClose={() => setPreviewOpen(false)}
-                hideHeader={true}
-                additionalData={getAdditionalDataForPreview()}
-              />
+              isFileResume && resume.file_url ? (
+                <iframe
+                  src={resume.file_url}
+                  title={resume.title || 'CV'}
+                  style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '12px' }}
+                />
+              ) : (
+                <CVPreview
+                  profileData={getProfileDataForPreview()}
+                  theme={selectedTheme || resume.content?.layout_settings?.theme || 'professional'}
+                  title={title || resume.title}
+                  onClose={() => setPreviewOpen(false)}
+                  hideHeader={true}
+                  additionalData={getAdditionalDataForPreview()}
+                />
+              )
             ) : (
               <div className="resume-preview-loading">
                 <div className="spinner" style={{ width: '48px', height: '48px', margin: '0 auto 16px' }} />

@@ -16,6 +16,8 @@ export default function App(){
   const location = useLocation()
   const isProfileScreen = location.pathname.startsWith('/profile')
   const isRecruiterScreen = location.pathname.startsWith('/recruiter')
+  const isPostJobPage = location.pathname === '/post-job'
+  const isRecruiterPage = isRecruiterScreen || isPostJobPage
 
   const fetchProfileMeta = async () => {
     if(!getRole()){
@@ -74,7 +76,7 @@ export default function App(){
     }
   }
 
-  const recruiterAllowedPaths = ['/change-password', '/recruiter/change-password', '/onboarding/company']
+  const recruiterAllowedPaths = ['/change-password', '/recruiter/change-password', '/onboarding/company', '/post-job']
   const employerRoles = ['employer', 'recruiter']
 
   useEffect(() => {
@@ -94,7 +96,7 @@ export default function App(){
   const avatarUrl = profileMeta?.profile?.avatar_url || user?.avatar || ''
   const avatarFallback = (displayName || 'U').trim().charAt(0).toUpperCase()
 
-  if(isRecruiterScreen){
+  if(isRecruiterPage){
     return <Outlet />
   }
 
@@ -149,9 +151,17 @@ export default function App(){
                           Hồ sơ của tôi
                         </button>
                         {role === 'seeker' && (
+                          <>
                           <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/resumes') }}>
                             CV của tôi
                           </button>
+                            <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/applications') }}>
+                              Đơn ứng tuyển
+                            </button>
+                            <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/saved-jobs') }}>
+                              Việc làm đã lưu
+                            </button>
+                          </>
                         )}
                         <button className="btn ghost" style={{ width: '100%', textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => { setMenuOpen(false); navigate('/change-password') }}>
                           Đổi mật khẩu

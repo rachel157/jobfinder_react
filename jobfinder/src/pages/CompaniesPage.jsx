@@ -141,7 +141,8 @@ const normalizeCompany = (raw) => {
     company_details: details,
     location,
     display_size: computedSize,
-    description_short: raw.description || details.culture_description || ''
+    description_short: raw.description || details.culture_description || '',
+    stats: raw.stats || { open_jobs_count: raw.open_jobs_count ?? 0 }
   }
 }
 
@@ -170,10 +171,11 @@ export default function CompaniesPage() {
     try {
       const query = buildQuery(filters)
       const payload = await CompanyService.list(query ? `?${query}` : '')
-      const items = Array.isArray(payload?.data) ? payload.data.map(normalizeCompany).filter(Boolean) : Array.isArray(payload) ? payload.map(normalizeCompany).filter(Boolean) : []
+      const rawData = payload?.data ?? payload
+      const items = Array.isArray(rawData) ? rawData.map(normalizeCompany).filter(Boolean) : []
       const sorted = applyClientSort(items, filters.sort)
       setCompanies(sorted)
-      const pag = payload?.pagination || {}
+      const pag = payload?.meta || payload?.pagination || {}
       setPagination({
         page: pag.page || filters.page || 1,
         limit: pag.limit || filters.limit || DEFAULT_LIMIT,

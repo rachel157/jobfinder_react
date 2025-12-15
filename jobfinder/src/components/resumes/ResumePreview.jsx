@@ -19,7 +19,16 @@ export default function ResumePreview({ resume }) {
   const educations = sections.educations?.items || content.educations || []
   const projects = content.projects || []
   const languages = content.languages || []
-  const summary = content.summary || ''
+
+  // summary có thể là string hoặc object { content, enabled }
+  const rawSummary = content.summary
+  const summary =
+    typeof rawSummary === 'string'
+      ? rawSummary
+      : typeof rawSummary === 'object' && rawSummary !== null
+      ? rawSummary.content || ''
+      : ''
+
   const references = content.references || []
 
   const formatDate = (dateStr) => {

@@ -23,5 +23,9 @@ export const companyApi = {
     return api.post(`/api/uploads/company-logo/${companyId}`, formData).then(pickData)
   },
 
-  getPublicCompany: (id) => api.get(`/api/companies/${id}`).then(pickData),
+  getPublicCompany: (id) => api.get(`/api/companies/${id}?details=true`).then(pickData),
+  listPublicCompanies: (params) =>
+    api
+      .get('/api/companies', { params })
+      .then(pickData),
 }

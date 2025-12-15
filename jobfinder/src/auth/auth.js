@@ -17,7 +17,8 @@ export function logout(){
 }
 
 export function isEmployer(){
-  return getRole() === 'employer'
+  const role = getRole()
+  return role === 'employer' || role === 'recruiter'
 }
 
 export function isLoggedIn(){

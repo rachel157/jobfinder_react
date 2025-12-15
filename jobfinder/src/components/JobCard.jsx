@@ -11,12 +11,14 @@ const JOB_TYPE_LABELS = {
 const EXPERIENCE_LABELS = {
   any: 'Bất kỳ',
   0: 'Bất kỳ',
-  1: 'Junior',
-  2: 'Mid',
-  3: 'Senior',
-  junior: 'Junior',
-  mid: 'Mid',
-  senior: 'Senior'
+  1: '1 năm',
+  2: '2 năm',
+  3: '3 năm',
+  4: '4 năm',
+  5: '5+ năm',
+  junior: '1 năm',
+  mid: '2 năm',
+  senior: '3+ năm'
 }
 
 const formatSalary = (job) => {

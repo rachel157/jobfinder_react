@@ -16,14 +16,14 @@ export default function StepIndicator({ currentStep, totalSteps, stepNames, onSt
   }
 
   return (
-    <div className="step-indicator">
-      <div className="step-indicator__progress">
+    <div className="resume-step-indicator">
+      <div className="resume-step-indicator__progress">
         <div 
-          className="step-indicator__progress-bar"
+          className="resume-step-indicator__progress-bar"
           style={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
         />
       </div>
-      <div className="step-indicator__steps">
+      <div className="resume-step-indicator__steps">
         {steps.map((step) => {
           const status = getStepStatus(step)
           const stepName = stepNames[step] || `Bước ${step}`
@@ -32,11 +32,11 @@ export default function StepIndicator({ currentStep, totalSteps, stepNames, onSt
           return (
             <div
               key={step}
-              className={`step-indicator__step step-indicator__step--${status} ${clickable ? 'step-indicator__step--clickable' : ''}`}
+              className={`resume-step-indicator__step resume-step-indicator__step--${status} ${clickable ? 'resume-step-indicator__step--clickable' : ''}`}
               onClick={() => clickable && onStepClick && onStepClick(step)}
               title={stepName}
             >
-              <div className="step-indicator__step-number">
+              <div className="resume-step-indicator__step-number">
                 {status === 'completed' ? (
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                     <path
@@ -51,7 +51,7 @@ export default function StepIndicator({ currentStep, totalSteps, stepNames, onSt
                   step
                 )}
               </div>
-              <div className="step-indicator__step-label">{stepName}</div>
+              <div className="resume-step-indicator__step-label">{stepName}</div>
             </div>
           )
         })}
