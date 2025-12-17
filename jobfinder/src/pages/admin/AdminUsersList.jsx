@@ -264,7 +264,8 @@ export default function AdminUsersList() {
                     </tr>
                   ) : (
                     users.map((user) => {
-                const profile = user.profiles?.[0] || {}
+                // profiles có thể là object (một-một) hoặc array (một-nhiều)
+                const profile = Array.isArray(user.profiles) ? user.profiles[0] : (user.profiles || {})
                       const name = profile.full_name || '--'
                 return (
                         <tr key={user.id}>

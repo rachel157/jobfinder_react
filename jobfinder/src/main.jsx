@@ -115,6 +115,11 @@ const router = createBrowserRouter(
           <RecruiterDashboard />
         </RequireEmployer>
       ) },
+      { path: 'recruiter/talent-pool', element: (
+        <RequireEmployer>
+          <RecruiterDashboard />
+        </RequireEmployer>
+      ) },
       { path: 'recruiter/company', element: (
         <RequireEmployer>
           <RecruiterCompanyGuard>
@@ -129,7 +134,7 @@ const router = createBrowserRouter(
       ) },
       { path: 'recruiter/jobs', element: (
         <RequireEmployer>
-          <MyJobs />
+          <RecruiterDashboard />
         </RequireEmployer>
       ) },
       { path: 'recruiter/jobs/:id/manage', element: (

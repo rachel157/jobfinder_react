@@ -927,14 +927,14 @@ export default function Profile(){
                 </div>
 
                 <div className="profile-summary__list">
-                  <SummaryRow icon="[CV]" label="Vị trí mong muốn" value={summary.desiredJob || "Chưa có"} />
-                  <SummaryRow icon="[LV]" label="Khu vực" value={summary.location || "Chưa có"} />
-                  <SummaryRow icon="[DT]" label="Điện thoại" value={summary.phone || "Chưa cập nhật"} />
-                  <SummaryRow icon="[WB]" label="Website" value={summary.website || "-"} />
-                  <SummaryRow icon="[IN]" label="LinkedIn" value={summary.linkedin || "-"} />
-                  <SummaryRow icon="[GH]" label="GitHub" value={summary.github || "-"} />
+                  <SummaryRow icon="🎯" label="Vị trí mong muốn" value={summary.desiredJob || "Chưa có"} />
+                  <SummaryRow icon="📍" label="Khu vực" value={summary.location || "Chưa có"} />
+                  <SummaryRow icon="📞" label="Điện thoại" value={summary.phone || "Chưa cập nhật"} />
+                  <SummaryRow icon="🌐" label="Website" value={summary.website || "-"} />
+                  <SummaryRow icon="in" label="LinkedIn" value={summary.linkedin || "-"} />
+                  <SummaryRow icon="🐙" label="GitHub" value={summary.github || "-"} />
                   <SummaryRow
-                    icon="[JOB]"
+                    icon="💼"
                     label="Loại công việc"
                     value={
                       summary.jobTypes.length ? (
@@ -947,7 +947,7 @@ export default function Profile(){
                     }
                   />
                   <SummaryRow
-                    icon="[STATUS]"
+                    icon="📣"
                     label="Trạng thái tìm việc"
                     value={
                       <span className={`summary-chip ${summary.looking ? "active" : "inactive"}`}>

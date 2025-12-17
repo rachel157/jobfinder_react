@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom"
 import { AuthClient } from "../services/authClient"
 import { getAuthUser, getRefreshToken, logout as clearAuth } from "../auth/auth"
 import { companyApi } from "../services/companyApi"
+import MyJobs from "./MyJobs.jsx"
 import { JobService, ApplicationService } from "../lib/api.js"
 import "./recruiter-dashboard.css"
 
@@ -54,7 +55,7 @@ const navItems = [
   { label: "Bảng điều khiển", icon: "", path: "/recruiter/dashboard" },
   { label: "Tin tuyển dụng", icon: "", path: "/recruiter/jobs" },
   { label: "Ứng viên", icon: "", path: "/recruiter/dashboard" },
-  { label: "Talent pool", icon: "", path: "/recruiter/dashboard" },
+  { label: "Talent pool", icon: "", path: "/recruiter/talent-pool" },
   { label: "Hồ sơ công ty", icon: "", path: "/recruiter/company" },
 ]
 
@@ -112,9 +113,12 @@ export default function RecruiterDashboard() {
   const [details, setDetails] = useState(null)
   const [jobs, setJobs] = useState([])
   const [jobsLoading, setJobsLoading] = useState(true)
+  const [jobStatusTab, setJobStatusTab] = useState("all") // all | active | draft
   const [selectedJobId, setSelectedJobId] = useState("")
   const [applications, setApplications] = useState([])
   const [applicationsLoading, setApplicationsLoading] = useState(false)
+  const [pipelineStatusFilter, setPipelineStatusFilter] = useState("") // '' = tất cả
+  const [pipelineDateFilter, setPipelineDateFilter] = useState("") // yyyy-MM-dd
   const [stats, setStats] = useState({
     active: 0,
     draft: 0,
@@ -122,18 +126,50 @@ export default function RecruiterDashboard() {
     totalOffers: 0
   })
 
+  // Lọc dữ liệu cho pipeline theo filter trạng thái & ngày
+  const filteredApplications = useMemo(() => {
+    return applications.filter((app) => {
+      if (pipelineStatusFilter && app.status !== pipelineStatusFilter) {
+        return false
+      }
+      if (pipelineDateFilter) {
+        const appliedAt = app.applied_at ? new Date(app.applied_at) : null
+        if (!appliedAt || Number.isNaN(appliedAt.getTime())) return false
+        const filterDate = new Date(pipelineDateFilter)
+        // so sánh theo ngày (bỏ qua giờ)
+        const appliedDay = new Date(appliedAt.getFullYear(), appliedAt.getMonth(), appliedAt.getDate())
+        const filterDay = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate())
+        if (appliedDay < filterDay) return false
+      }
+      return true
+    })
+  }, [applications, pipelineStatusFilter, pipelineDateFilter])
+
   const pipelineBuckets = useMemo(
     () =>
       pipelineStatuses.reduce((acc, status) => {
-        acc[status.key] = applications.filter((app) => app.status === status.key)
+        acc[status.key] = filteredApplications.filter((app) => app.status === status.key)
         return acc
       }, {}),
-    [applications]
+    [filteredApplications]
   )
+
+  // Lọc danh sách job theo tab trạng thái
+  const filteredJobsByTab = useMemo(() => {
+    if (jobStatusTab === "active") {
+      return jobs.filter((j) => j.status === "approved")
+    }
+    if (jobStatusTab === "draft") {
+      return jobs.filter((j) => j.status === "draft")
+    }
+    return jobs
+  }, [jobs, jobStatusTab])
+
+  const displayedJobs = useMemo(() => filteredJobsByTab.slice(0, 5), [filteredJobsByTab])
 
   const recentApplications = useMemo(
     () =>
-      applications
+      filteredApplications
         .slice()
         .sort(
           (a, b) =>
@@ -141,8 +177,9 @@ export default function RecruiterDashboard() {
             new Date(a.applied_at || 0).getTime()
         )
         .slice(0, 5),
-    [applications]
+    [filteredApplications]
   )
+
 
   const authUser = getAuthUser() || {}
   useEffect(() => {
@@ -245,6 +282,7 @@ export default function RecruiterDashboard() {
     }
   }, [selectedJobId])
 
+
   const completion = computeProfileCompletion(company, details)
   const completionPercent = completion.percent
 
@@ -253,9 +291,22 @@ export default function RecruiterDashboard() {
   const avatarUrl = company?.logo_url || authUser?.avatar
   const avatarFallback = (company?.name || displayName || "R")?.trim()?.charAt(0)?.toUpperCase() || "R"
 
+  // Xác định xem đang ở trang nào
+  const isTalentPoolPage = location.pathname === '/recruiter/talent-pool'
+  const isDashboardPage = location.pathname === '/recruiter/dashboard'
+  const isJobsPage = location.pathname === '/recruiter/jobs'
+
   const goToChangePassword = () => {
     setProfileOpen(false)
     navigate("/recruiter/change-password")
+  }
+
+  const goToRecentApplications = () => {
+    if (selectedJobId) {
+      navigate(`/recruiter/jobs/${selectedJobId}/applications`)
+    } else {
+      navigate("/recruiter/jobs")
+    }
   }
 
   const handleLogout = async () => {
@@ -372,59 +423,65 @@ export default function RecruiterDashboard() {
         </aside>
 
         <main className="rd-main">
-          <section className="rd-card rd-hero-card">
-            <div>
-              <p className="rd-eyebrow">Xin chào</p>
-              <h1>
-                {displayName} <span aria-hidden="true">👋</span>
-              </h1>
-              <p>Theo dõi tiến độ tuyển dụng và quản lý pipeline của bạn.</p>
-              <div className="rd-chip-row">
-                <button className="rd-secondary-btn" onClick={() => navigate("/recruiter/company")}>
-                  Quản lý hồ sơ công ty
-                </button>
-                <button className="rd-secondary-btn" onClick={() => navigate("/onboarding/company")}>
-                  Tạo hồ sơ công ty
-                </button>
-              </div>
-            </div>
-            <Link 
-              to="/post-job"
-              className="rd-primary-btn" 
-              style={{ textDecoration: 'none', display: 'inline-block', cursor: 'pointer', position: 'relative', zIndex: 10, pointerEvents: 'auto' }}
-              onClick={(e) => {
-                console.log('Link clicked, navigating to /post-job')
-              }}
-            >
-              Đăng tin mới
-            </Link>
-          </section>
+          {isDashboardPage && (
+            <>
+              <section className="rd-card rd-hero-card">
+                <div>
+                  <p className="rd-eyebrow">Xin chào</p>
+                  <h1>
+                    {displayName} <span aria-hidden="true">👋</span>
+                  </h1>
+                  <p>Theo dõi tiến độ tuyển dụng và quản lý pipeline của bạn.</p>
+                  <div className="rd-chip-row">
+                    <button className="rd-secondary-btn" onClick={() => navigate("/recruiter/company")}>
+                      Quản lý hồ sơ công ty
+                    </button>
+                    <button className="rd-secondary-btn" onClick={() => navigate("/onboarding/company")}>
+                      Tạo hồ sơ công ty
+                    </button>
+                  </div>
+                </div>
+                <Link 
+                  to="/post-job"
+                  className="rd-primary-btn" 
+                  style={{ textDecoration: 'none', display: 'inline-block', cursor: 'pointer', position: 'relative', zIndex: 10, pointerEvents: 'auto' }}
+                  onClick={(e) => {
+                    console.log('Link clicked, navigating to /post-job')
+                  }}
+                >
+                  Đăng tin mới
+                </Link>
+              </section>
 
-          <section className="rd-grid rd-grid--stats">
-            <article className="rd-card">
-              <p className="rd-label">Tin đang hoạt động</p>
-              <p className="rd-value">{jobsLoading ? '...' : stats.active}</p>
-            </article>
-            <article className="rd-card">
-              <p className="rd-label">Tin nháp</p>
-              <p className="rd-value">{jobsLoading ? '...' : stats.draft}</p>
-            </article>
-            <article className="rd-card">
-              <p className="rd-label">Ứng tuyển đang mở</p>
-              <p className="rd-value">{jobsLoading ? '...' : stats.totalApplications}</p>
-            </article>
-            <article className="rd-card">
-              <p className="rd-label">Offer chấp nhận (30 ngày)</p>
-              <p className="rd-value">{jobsLoading ? '...' : stats.totalOffers}</p>
-            </article>
-          </section>
+              <section className="rd-grid rd-grid--stats">
+                <article className="rd-card">
+                  <p className="rd-label">Tin đang hoạt động</p>
+                  <p className="rd-value">{jobsLoading ? '...' : stats.active}</p>
+                </article>
+                <article className="rd-card">
+                  <p className="rd-label">Tin nháp</p>
+                  <p className="rd-value">{jobsLoading ? '...' : stats.draft}</p>
+                </article>
+                <article className="rd-card">
+                  <p className="rd-label">Ứng tuyển đang mở</p>
+                  <p className="rd-value">{jobsLoading ? '...' : stats.totalApplications}</p>
+                </article>
+                <article className="rd-card">
+                  <p className="rd-label">Offer chấp nhận (30 ngày)</p>
+                  <p className="rd-value">{jobsLoading ? '...' : stats.totalOffers}</p>
+                </article>
+              </section>
+            </>
+          )}
 
-          <section className="rd-card">
-            <div className="rd-card__head">
-              <div>
-                <h2>Pipeline ứng tuyển</h2>
-                <p className="rd-muted">Theo dõi trạng thái ứng viên theo từng giai đoạn.</p>
-              </div>
+          {isDashboardPage && (
+            <>
+            <section className="rd-card">
+              <div className="rd-card__head">
+                <div>
+                  <h2>Pipeline ứng tuyển</h2>
+                  <p className="rd-muted">Theo dõi trạng thái ứng viên theo từng giai đoạn.</p>
+                </div>
               <div className="rd-filters">
                 <select
                   value={selectedJobId}
@@ -436,10 +493,22 @@ export default function RecruiterDashboard() {
                     </option>
                   ))}
                 </select>
-                <select disabled>
-                  <option>Tất cả trạng thái</option>
+                <select
+                  value={pipelineStatusFilter}
+                  onChange={(e) => setPipelineStatusFilter(e.target.value)}
+                >
+                  <option value="">Tất cả trạng thái</option>
+                  {pipelineStatuses.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
                 </select>
-                <input type="date" disabled />
+                <input
+                  type="date"
+                  value={pipelineDateFilter}
+                  onChange={(e) => setPipelineDateFilter(e.target.value)}
+                />
               </div>
             </div>
 
@@ -478,9 +547,9 @@ export default function RecruiterDashboard() {
             <div className="rd-table-wrapper">
               <div className="rd-table-head">
                 <h3>Ứng tuyển gần đây</h3>
-                <button className="rd-link">Xem tất cả</button>
+                <button className="rd-link" onClick={goToRecentApplications}>Xem tất cả</button>
               </div>
-              <div className="rd-table">
+              <div className="rd-table rd-table--recent">
                 <div className="rd-table__row rd-table__row--head">
                   <span>Ứng viên</span>
                   <span>Vị trí</span>
@@ -507,8 +576,9 @@ export default function RecruiterDashboard() {
                       <span>{app.candidate?.full_name || "Chưa có tên"}</span>
                       <span>
                         {app.job_title ||
+                          app.job?.title ||
                           jobs.find((j) => j.id === app.job_id)?.title ||
-                          "--"}
+                          "Không rõ vị trí"}
                       </span>
                       <span className="rd-status">
                         {STATUS_LABELS[app.status] || app.status}
@@ -538,9 +608,24 @@ export default function RecruiterDashboard() {
                 <p className="rd-muted">Quản lý trạng thái tin đăng và hiệu suất tiếp cận ứng viên.</p>
               </div>
               <div className="rd-tabs">
-                <button className="active">Tất cả</button>
-                <button>Đang hoạt động</button>
-                <button>Nháp</button>
+                <button
+                  className={jobStatusTab === "all" ? "active" : ""}
+                  onClick={() => setJobStatusTab("all")}
+                >
+                  Tất cả
+                </button>
+                <button
+                  className={jobStatusTab === "active" ? "active" : ""}
+                  onClick={() => setJobStatusTab("active")}
+                >
+                  Đang hoạt động
+                </button>
+                <button
+                  className={jobStatusTab === "draft" ? "active" : ""}
+                  onClick={() => setJobStatusTab("draft")}
+                >
+                  Nháp
+                </button>
               </div>
             </div>
 
@@ -565,7 +650,7 @@ export default function RecruiterDashboard() {
                   <span colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Chưa có tin tuyển dụng nào.</span>
                 </div>
               ) : (
-                jobs.slice(0, 5).map((job) => {
+                displayedJobs.map((job) => {
                   const status = job.status || 'draft'
                   const statusLabel = status === 'approved' ? 'Đã duyệt' : status === 'draft' ? 'Nháp' : 'Đã đóng'
                   const statusClass = status === "approved" ? "success" : status === "draft" ? "warning" : "info"
@@ -574,7 +659,7 @@ export default function RecruiterDashboard() {
                   const posted = job.posted_at ? new Date(job.posted_at).toLocaleDateString('vi-VN') : '--'
                   const expires = job.expires_at ? new Date(job.expires_at).toLocaleDateString('vi-VN') : '--'
                   const applications = job._count?.applications || job.applications_count || 0
-                  const views = job._count?.views || job.views_count || 0
+                  const views = job._count?.job_views || job.views_count || job._count?.views || 0
                   
                   return (
                     <div className="rd-table__row" key={job.id}>
@@ -664,6 +749,26 @@ export default function RecruiterDashboard() {
               </div>
             </article>
           </section>
+            </>
+          )}
+
+          {isJobsPage && (
+            <section className="rd-card" style={{ padding: 0, boxShadow: "none", background: "transparent" }}>
+              {/* Tái sử dụng trang MyJobs nhưng vẫn giữ sidebar recruiter */}
+              <MyJobs />
+            </section>
+          )}
+
+          {isTalentPoolPage && (
+            <section className="rd-card">
+              <div className="rd-card__head">
+                <div>
+                  <h2>Talent Pool</h2>
+                  <p className="rd-muted">Tính năng đang được phát triển.</p>
+                </div>
+              </div>
+            </section>
+          )}
         </main>
       </div>
     </div>

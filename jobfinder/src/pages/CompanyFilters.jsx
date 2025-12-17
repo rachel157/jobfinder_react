@@ -4,6 +4,7 @@ import './CompanyFilters.css'
 export default function CompanyFilters({
   filters,
   onChange,
+  onApply,
   onClear,
   sizeOptions,
   industryOptions,
@@ -19,16 +20,16 @@ export default function CompanyFilters({
   const content = (
     <div className="filters-card">
       <div className="filters-header">
-        <h3>Tìm theo tên công ty</h3>
+        <h3>Tìm công ty</h3>
         <p className="filters-sub">Lọc nhanh danh sách nhà tuyển dụng</p>
       </div>
 
       <div className="filters-group">
-        <label className="filters-label">Tìm theo tên công ty</label>
+        <label className="filters-label">Từ khóa</label>
         <input
           className="filters-input"
           type="text"
-          placeholder="Nhập tên công ty"
+          placeholder="Nhập tên, mô tả công ty"
           value={filters.search}
           onChange={(e) => handleInput('search', e.target.value)}
         />
@@ -53,8 +54,8 @@ export default function CompanyFilters({
         <label className="filters-label">Địa điểm</label>
         <select
           className="filters-select"
-          value={filters.locationId}
-          onChange={(e) => handleInput('locationId', e.target.value)}
+          value={filters.location_id}
+          onChange={(e) => handleInput('location_id', e.target.value)}
         >
           {locationOptions.map((opt) => (
             <option key={opt.value || opt.label} value={opt.value}>
@@ -68,8 +69,8 @@ export default function CompanyFilters({
         <label className="filters-label">Loại hình công ty</label>
         <select
           className="filters-select"
-          value={filters.companyType}
-          onChange={(e) => handleInput('companyType', e.target.value)}
+          value={filters.company_type}
+          onChange={(e) => handleInput('company_type', e.target.value)}
         >
           {companyTypeOptions.map((opt) => (
             <option key={opt.value || opt.label} value={opt.value}>
@@ -83,8 +84,8 @@ export default function CompanyFilters({
         <label className="filters-label">Quy mô</label>
         <select
           className="filters-select"
-          value={filters.sizeRange}
-          onChange={(e) => handleInput('sizeRange', e.target.value)}
+          value={filters.size_range}
+          onChange={(e) => handleInput('size_range', e.target.value)}
         >
           {sizeOptions.map((opt) => (
             <option key={opt.value || opt.label} value={opt.value}>
@@ -98,15 +99,18 @@ export default function CompanyFilters({
         <label>
           <input
             type="checkbox"
-            checked={filters.hasOpenJobs}
-            onChange={(e) => handleInput('hasOpenJobs', e.target.checked)}
+            checked={filters.has_open_jobs}
+            onChange={(e) => handleInput('has_open_jobs', e.target.checked)}
           />
-          <span>Chỉ hiển thị công ty đang tuyển</span>
+          <span>Chỉ hiện công ty đang tuyển</span>
         </label>
       </div>
 
       <button className="filters-reset" onClick={onClear} type="button">
         Xóa bộ lọc
+      </button>
+      <button className="filters-apply" onClick={onApply} type="button">
+        Áp dụng
       </button>
     </div>
   )

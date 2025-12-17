@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 const formatSize = (company) => {
   const details = company?.company_details || {}
@@ -29,9 +30,9 @@ export default function CompanyCard({ company }) {
         </div>
         <div className="company-meta">
           <div className="name-row">
-            <button className="link-btn" onClick={() => alert(`Xem công ty ${company.id}`)}>
+            <Link className="link-btn" to={`/companies/${company.id}`}>
               {company.name}
-            </button>
+            </Link>
             {company.is_verified && <span className="verified">Đã xác minh</span>}
           </div>
           <div className="meta-row company-line">
@@ -58,9 +59,9 @@ export default function CompanyCard({ company }) {
       )}
 
       <div className="company-links">
-        <a className="btn ghost" href={`/companies/${company.id}`} aria-label={`Xem chi tiết ${company.name || ''}`}>
-          Xem chi tiết
-        </a>
+        <Link className="btn ghost" to={`/companies/${company.id}`} aria-label={`Xem chi tiet ${company.name || ''}`}>
+          Xem chi tiet
+        </Link>
         <div className="social-links tiny">
           {company?.linkedin_url && (
             <a href={company.linkedin_url} target="_blank" rel="noreferrer" aria-label="LinkedIn">

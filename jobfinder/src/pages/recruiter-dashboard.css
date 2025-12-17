@@ -95,8 +95,46 @@
 .rd-table{width:100%; overflow-x:auto}
 .rd-table__row{display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:10px; padding:12px 0; border-bottom:1px solid rgba(15,23,42,.06); font-size:14px}
 .rd-table__row--head{font-size:12px; text-transform:uppercase; color:#94a3b8; font-weight:600}
-.rd-table--jobs .rd-table__row{grid-template-columns:2fr repeat(6,minmax(120px,1fr)) 120px}
-.rd-table--jobs .rd-table__row span:last-child{text-align:right}
+.rd-table--jobs .rd-table__row{
+  grid-template-columns:2fr repeat(7,minmax(100px,1fr)) 140px;
+  align-items:center;
+}
+.rd-table--jobs .rd-table__row span:last-child,
+.rd-table--jobs .rd-table__row--head span:last-child{
+  justify-self:center;
+  text-align:center;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.rd-table--jobs .rd-table__row span:nth-child(8){
+  text-align:center;
+  justify-content:center;
+}
+.rd-table--recent .rd-table__row{
+  /* Ứng viên | Vị trí | Trạng thái | Ngày nộp | Giai đoạn | Hành động */
+  grid-template-columns:2.2fr 1.2fr 1.2fr 1.2fr 1.3fr 0.9fr;
+}
+.rd-table--recent .rd-table__row span:nth-child(3){
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.rd-table--recent .rd-table__row span:nth-child(6){
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+}
+.rd-table--recent .rd-table__row--head span:nth-child(6){
+  display:flex;
+  justify-content:center;
+  text-align:center;
+}
+.rd-table--recent .rd-status{
+  min-width:88px;
+  justify-content:center;
+}
 .rd-status{display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:999px; font-size:12px; background:#e2e8f0; color:#334155}
 .rd-status.success{background:#d1fae5; color:#047857}
 .rd-status.warning{background:#fef3c7; color:#b45309}
@@ -105,7 +143,17 @@
 .rd-row-actions button{border:none; background:transparent; color:#2563eb; font-weight:600; cursor:pointer}
 .rd-row-actions .danger{color:#dc2626}
 .rd-secondary-btn{border:1px solid rgba(15,23,42,.15); border-radius:999px; padding:4px 14px; font-weight:600; background:#fff; cursor:pointer}
-.rd-manage-cell{display:flex; justify-content:flex-end}
+.rd-manage-cell{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:100%;
+}
+.rd-manage-cell .rd-secondary-btn{
+  min-width:96px;
+  margin:0 auto;
+  justify-content:center;
+}
 
 .rd-stack{display:flex; flex-direction:column; gap:12px; margin-top:16px}
 .rd-pill-card--horizontal{display:flex; justify-content:space-between; gap:16px; align-items:flex-start}

@@ -39,8 +39,53 @@ export default function AdminJobDetail() {
     setLoading(true)
     setError(null)
     try {
+      console.log('[AdminJobDetail] Loading job with id:', id)
       const response = await adminApi.getJobDetails(id)
+      console.log('[AdminJobDetail] Raw API response:', response)
+      console.log('[AdminJobDetail] Response type:', typeof response)
+      console.log('[AdminJobDetail] Response keys:', Object.keys(response || {}))
+      
       const jobData = response?.data || response
+      console.log('[AdminJobDetail] Job data received:', jobData)
+      console.log('[AdminJobDetail] Job data type:', typeof jobData)
+      console.log('[AdminJobDetail] Job data keys:', Object.keys(jobData || {}))
+      
+      // Check _count in multiple possible locations
+      const countData = jobData?._count || jobData?.count || jobData?.stats
+      console.log('[AdminJobDetail] Count data found:', {
+        _count: jobData?._count,
+        count: jobData?.count,
+        stats: jobData?.stats,
+        countData: countData
+      })
+      
+      // If _count doesn't exist, try to create it from other sources
+      if (!jobData._count && countData) {
+        console.log('[AdminJobDetail] Using count/countData as _count')
+        jobData._count = countData
+      }
+      
+      // Final check
+      console.log('[AdminJobDetail] Final jobData._count:', jobData?._count)
+      console.log('[AdminJobDetail] Job _count details:', {
+        applications: jobData?._count?.applications,
+        saved_jobs: jobData?._count?.saved_jobs,
+        job_views: jobData?._count?.job_views,
+        full_count: jobData?._count
+      })
+      
+      // Check if _count exists and log warning if missing
+      if (!jobData?._count) {
+        console.warn('[AdminJobDetail] WARNING: _count is missing from job data!')
+        console.warn('[AdminJobDetail] Available keys:', Object.keys(jobData || {}))
+        // Set default _count
+        jobData._count = {
+          applications: 0,
+          saved_jobs: 0,
+          job_views: 0
+        }
+      }
+      
       setJob(jobData)
       
       // Load labels from metadata
@@ -52,7 +97,13 @@ export default function AdminJobDetail() {
         })
       }
     } catch (err) {
-      console.error('Failed to load job:', err)
+      console.error('[AdminJobDetail] Failed to load job:', err)
+      console.error('[AdminJobDetail] Error details:', {
+        message: err?.message,
+        status: err?.status,
+        data: err?.data,
+        stack: err?.stack
+      })
       setError(err?.message || 'Không thể tải thông tin công việc.')
     } finally {
       setLoading(false)
@@ -264,25 +315,6 @@ export default function AdminJobDetail() {
             </div>
           )}
 
-          {job._count && (
-            <div className="admin-card">
-              <h2>Thống kê</h2>
-              <div className="admin-info-grid">
-                <div className="admin-info-item">
-                  <label>Ứng tuyển</label>
-                  <div>{job._count.applications || 0}</div>
-                </div>
-                <div className="admin-info-item">
-                  <label>Đã lưu</label>
-                  <div>{job._count.saved_jobs || 0}</div>
-                </div>
-                <div className="admin-info-item">
-                  <label>Lượt xem</label>
-                  <div>{job._count.job_views || 0}</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="admin-job-detail-sidebar">

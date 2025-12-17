@@ -415,8 +415,9 @@ export default function ApplicationsList() {
                 </thead>
                 <tbody>
                   {applications.map((app) => {
-                    const profile = app.profiles || app.candidate?.profile || {}
-                    const name = profile.full_name || profile.name || 'Chưa có tên'
+                    // API trả về app.candidate (backend format) hoặc app.profiles (legacy)
+                    const profile = app.profiles || app.candidate || app.candidate?.profile || {}
+                    const name = profile.full_name || profile.display_name || profile.name || 'Chưa có tên'
                     const status = app.status || 'pending'
                     const isSelected = selectedApps.includes(app.id)
                     
@@ -485,8 +486,8 @@ export default function ApplicationsList() {
           ) : (
             <div className="applications-card-grid">
               {applications.map((app) => {
-                const profile = app.profiles || app.candidate?.profile || {}
-                const name = profile.full_name || profile.name || 'Chưa có tên'
+                const profile = app.profiles || app.candidate || app.candidate?.profile || {}
+                const name = profile.full_name || profile.display_name || profile.name || 'Chưa có tên'
                 const status = app.status || 'pending'
                 const isSelected = selectedApps.includes(app.id)
                 
@@ -603,4 +604,9 @@ export default function ApplicationsList() {
     </div>
   )
 }
+
+
+
+
+
 

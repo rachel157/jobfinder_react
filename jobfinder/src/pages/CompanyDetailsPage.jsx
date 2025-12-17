@@ -140,18 +140,35 @@ const normalizeCompany = (raw) => {
   // Backend returns 'jobs' array, map to 'open_jobs' for consistency
   // Also ensure jobs have proper structure
   const openJobs = (companyData.open_jobs || companyData.jobs || []).map((job) => {
-    // Ensure job has location mapped correctly
-    if (job.locations && typeof job.locations === 'object') {
-      return {
-        ...job,
-        location: {
-          id: job.locations.id,
-          name: job.locations.name,
-          type: job.locations.type
-        }
-      }
+    const withLocation =
+      job.locations && typeof job.locations === 'object'
+        ? {
+            ...job,
+            location: {
+              id: job.locations.id,
+              name: job.locations.name,
+              type: job.locations.type
+            }
+          }
+        : job
+
+    // Get company logo - prioritize from company data, fallback to job's company object
+    const companyLogoUrl = 
+      companyData.logo_url || 
+      companyData.logoUrl ||
+      job.company?.logo_url ||
+      job.company?.logoUrl ||
+      null
+
+    return {
+      ...withLocation,
+      company: {
+        name: companyData.name,
+        logo_url: companyLogoUrl
+      },
+      companyName: companyData.name,
+      companyLogoUrl: companyLogoUrl
     }
-    return job
   })
   
   // Map company_benefits - backend returns as array

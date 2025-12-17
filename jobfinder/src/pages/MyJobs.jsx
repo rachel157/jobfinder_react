@@ -397,7 +397,7 @@ export default function MyJobs() {
                           </button>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {job._count?.views || job.views_count || 0}
+                          {job._count?.job_views || job.views_count || job._count?.views || 0}
                         </td>
                         <td>
                           <div className="job-actions">
@@ -509,7 +509,7 @@ export default function MyJobs() {
                       </div>
                       <div className="job-stat">
                         <span className="stat-label">Lượt xem</span>
-                        <span className="stat-value">{job._count?.views || job.views_count || 0}</span>
+                        <span className="stat-value">{job._count?.job_views || job.views_count || job._count?.views || 0}</span>
                       </div>
                       <div className="job-stat">
                         <span className="stat-label">Đăng ngày</span>

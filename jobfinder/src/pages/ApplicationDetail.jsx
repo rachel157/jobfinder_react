@@ -71,6 +71,45 @@ function renderRating(rating) {
   return filled + empty
 }
 
+/**
+ * Download file from URL
+ * @param {string} url - File URL
+ * @param {string} filename - Filename for download
+ */
+async function downloadFile(url, filename) {
+  try {
+    const token = localStorage.getItem('auth_token')
+    const headers = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: headers
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename || 'cv.pdf'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+  } catch (error) {
+    console.error('Download error:', error)
+    // Fallback: open in new tab if download fails
+    window.open(url, '_blank')
+    throw error
+  }
+}
+
 export default function ApplicationDetail() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -132,18 +171,30 @@ export default function ApplicationDetail() {
     if (!id) return
     setLoading(true)
     setError(null)
-    try {
-      const response = await ApplicationService.getDetail(id)
+      try {
+        const response = ApplicationService.getDetailRecruiter
+          ? await ApplicationService.getDetailRecruiter(id)
+          : await ApplicationService.getDetail(id)
       const data = response?.data || response
       console.log('Application data received:', data)
       console.log('Profile data:', data?.profiles)
       setApplication(data)
       setStatus(data.status || 'pending')
-      setNotes(data.notes || [])
+
+      // Đảm bảo notes luôn là mảng để tránh lỗi notes.map is not a function
+      const rawNotes = data?.notes
+      const normalizedNotes = Array.isArray(rawNotes)
+        ? rawNotes
+        : rawNotes
+          ? [rawNotes]
+          : []
+      setNotes(normalizedNotes)
       
       // Fetch stages separately
       try {
-        const stagesResponse = await ApplicationService.getStages(id)
+        const stagesResponse = ApplicationService.getStagesRecruiter
+          ? await ApplicationService.getStagesRecruiter(id)
+          : await ApplicationService.getStages(id)
         const stagesData = stagesResponse?.data || stagesResponse || []
         setStages(stagesData)
         setStageForm(prev => ({ ...prev, stage_order: stagesData.length + 1 }))
@@ -287,14 +338,38 @@ export default function ApplicationDetail() {
 
   const handleDownloadCV = async () => {
     try {
-      const response = await ApplicationService.getCV(id)
+      const response = ApplicationService.getCVRecruiter
+        ? await ApplicationService.getCVRecruiter(id)
+        : await ApplicationService.getCV(id)
       const data = response?.data || response
-      if (data.file_url) {
-        window.open(data.file_url, '_blank')
-      } else {
+      const resume = data?.resume || data
+      const fileUrl = resume?.file_url || data?.file_url
+      
+      if (!fileUrl) {
         alert('CV không có sẵn để tải xuống.')
+        return
+      }
+
+      // Get filename from resume title or use default
+      const filename = resume?.title 
+        ? `${resume.title}.pdf`
+        : `CV_${application?.profiles?.full_name || 'candidate'}_${new Date().getTime()}.pdf`
+
+      // Show loading indicator
+      const downloadBtn = document.querySelector('[data-download-cv]')
+      if (downloadBtn) {
+        downloadBtn.disabled = true
+        downloadBtn.textContent = 'Đang tải...'
+      }
+
+      await downloadFile(fileUrl, filename)
+      
+      if (downloadBtn) {
+        downloadBtn.disabled = false
+        downloadBtn.textContent = 'Tải CV'
       }
     } catch (err) {
+      console.error('Download CV error:', err)
       alert(err?.message || 'Không thể tải CV. Vui lòng thử lại.')
     }
   }
@@ -326,9 +401,13 @@ export default function ApplicationDetail() {
   const handleViewCV = async () => {
     setShowCVModal(true)
     setLoadingCV(true)
+    setCvData(null)
     try {
-      const response = await ApplicationService.getCV(id)
+      const response = ApplicationService.getCVRecruiter
+        ? await ApplicationService.getCVRecruiter(id)
+        : await ApplicationService.getCV(id)
       const data = response?.data || response
+      console.log('CV data received:', data)
       setCvData(data)
     } catch (err) {
       console.error('Failed to fetch CV:', err)
@@ -486,7 +565,12 @@ export default function ApplicationDetail() {
               </p>
               {application.resume_id && (
                 <div className="cv-actions">
-                  <Button variant="default" size="small" onClick={handleDownloadCV}>
+                  <Button 
+                    variant="default" 
+                    size="small" 
+                    onClick={handleDownloadCV}
+                    data-download-cv
+                  >
                     Tải CV
                   </Button>
                   <Button variant="outline" size="small" onClick={handleViewCV}>
@@ -511,6 +595,36 @@ export default function ApplicationDetail() {
                   <span>{job.title}</span>
                 </div>
               )}
+              <div className="info-item">
+                <span className="info-label">Stage hiện tại:</span>
+                <span>
+                  {(() => {
+                    // Try to get current_stage from application data
+                    if (application.current_stage?.stage_name) {
+                      return application.current_stage.stage_name
+                    }
+                    
+                    // If not available, find from stages array
+                    // Priority: in_progress > pending > scheduled > first stage
+                    if (stages && stages.length > 0) {
+                      const inProgressStage = stages.find(s => s.status === 'in_progress')
+                      if (inProgressStage) return inProgressStage.stage_name
+                      
+                      const pendingStage = stages.find(s => s.status === 'pending')
+                      if (pendingStage) return pendingStage.stage_name
+                      
+                      const scheduledStage = stages.find(s => s.status === 'scheduled')
+                      if (scheduledStage) return scheduledStage.stage_name
+                      
+                      // Return first stage by order
+                      const sortedStages = [...stages].sort((a, b) => (a.stage_order || 0) - (b.stage_order || 0))
+                      if (sortedStages.length > 0) return sortedStages[0].stage_name
+                    }
+                    
+                    return '--'
+                  })()}
+                </span>
+              </div>
             </div>
           </Card>
         </div>
@@ -1035,16 +1149,40 @@ export default function ApplicationDetail() {
       >
         <div style={{ padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0 }}>CV / Resume</h2>
-            {cvData?.file_url && (
+            <h2 style={{ margin: 0 }}>
+              CV / Resume
+              {cvData?.resume?.title && (
+                <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#64748b', marginLeft: '8px' }}>
+                  - {cvData.resume.title}
+                </span>
+              )}
+            </h2>
+            {(() => {
+              const resume = cvData?.resume || cvData
+              const fileUrl = resume?.file_url || cvData?.file_url
+              if (fileUrl) {
+                const filename = resume?.title 
+                  ? `${resume.title}.pdf`
+                  : `CV_${application?.profiles?.full_name || 'candidate'}_${new Date().getTime()}.pdf`
+                return (
               <Button 
                 variant="primary" 
                 size="small"
-                onClick={() => window.open(cvData.file_url, '_blank')}
+                    onClick={async () => {
+                      try {
+                        await downloadFile(fileUrl, filename)
+                      } catch (err) {
+                        console.error('Download error:', err)
+                        alert('Không thể tải CV. Vui lòng thử lại.')
+                      }
+                    }}
               >
                 Tải xuống
               </Button>
-            )}
+                )
+              }
+              return null
+            })()}
           </div>
           
           {loadingCV ? (
@@ -1053,9 +1191,43 @@ export default function ApplicationDetail() {
             </div>
           ) : cvData ? (
             <div className="cv-preview-content">
-              {cvData.file_url ? (
+              {(() => {
+                const resume = cvData?.resume || cvData
+                const fileUrl = resume?.file_url || cvData?.file_url
+                
+                if (fileUrl) {
+                  // Determine file type from URL extension
+                  const fileExtension = fileUrl.split('.').pop()?.toLowerCase()
+                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '')
+                  const isPDF = fileExtension === 'pdf' || fileUrl.includes('pdf')
+                  
+                  if (isImage) {
+                    // Display image
+                    return (
+                      <div style={{ textAlign: 'center' }}>
+                        <img
+                          src={fileUrl}
+                          alt="CV Preview"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '70vh',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            objectFit: 'contain'
+                          }}
+                          onError={(e) => {
+                            console.error('Image load error:', e)
+                            e.target.style.display = 'none'
+                            e.target.parentElement.innerHTML = '<p style="color: #ef4444; padding: 20px;">Không thể tải hình ảnh CV. Vui lòng thử tải xuống.</p>'
+                          }}
+                        />
+                      </div>
+                    )
+                  } else if (isPDF) {
+                    // Display PDF in iframe
+                    return (
                 <iframe
-                  src={cvData.file_url}
+                        src={fileUrl}
                   style={{
                     width: '100%',
                     height: '70vh',
@@ -1063,18 +1235,50 @@ export default function ApplicationDetail() {
                     borderRadius: '8px'
                   }}
                   title="CV Preview"
+                        onError={(e) => {
+                          console.error('Iframe load error:', e)
+                        }}
                 />
-              ) : cvData.content ? (
-                <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>
+                    )
+                  } else {
+                    // Try iframe for other document types
+                    return (
+                      <iframe
+                        src={fileUrl}
+                        style={{
+                          width: '100%',
+                          height: '70vh',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px'
+                        }}
+                        title="CV Preview"
+                        onError={(e) => {
+                          console.error('Iframe load error:', e)
+                        }}
+                      />
+                    )
+                  }
+                } else if (cvData.content || resume?.content) {
+                  // Display text content
+                  return (
+                    <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', maxHeight: '70vh', overflow: 'auto' }}>
                   <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>
-                    {cvData.content}
+                        {cvData.content || resume?.content}
                   </pre>
                 </div>
-              ) : (
+                  )
+                } else {
+                  // No CV available
+                  return (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <p>CV không có sẵn để xem.</p>
+                      <p style={{ color: '#64748b' }}>CV không có sẵn để xem.</p>
+                      <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '8px' }}>
+                        Ứng viên chưa đính kèm CV hoặc CV không khả dụng.
+                      </p>
                 </div>
-              )}
+                  )
+                }
+              })()}
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px' }}>

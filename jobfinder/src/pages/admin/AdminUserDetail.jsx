@@ -128,7 +128,8 @@ export default function AdminUserDetail() {
     )
   }
 
-  const profile = user.profiles?.[0] || {}
+  // profiles là relation một-một (không phải array)
+  const profile = Array.isArray(user.profiles) ? user.profiles[0] : (user.profiles || {})
 
   return (
     <div className="admin-user-detail">

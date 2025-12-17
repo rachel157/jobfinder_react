@@ -138,6 +138,7 @@ function buildQueryString(filters = {}) {
   if (filters.search) params.append('search', filters.search)
   if (filters.skill_names) params.append('skill_names', filters.skill_names)
   if (filters.location_name) params.append('location_name', filters.location_name)
+  if (filters.category) params.append('category', filters.category)
   
   // Filters
   if (filters.company_id) params.append('company_id', filters.company_id)
@@ -150,6 +151,20 @@ function buildQueryString(filters = {}) {
     }
   }
   if (filters.status) params.append('status', filters.status)
+  if (filters.interest_type) params.append('interest_type', filters.interest_type)
+  if (filters.role) params.append('role', filters.role)
+  if (filters.candidate_id) params.append('candidate_id', filters.candidate_id)
+  if (filters.min_experience !== undefined && filters.min_experience !== null) {
+    const expNum = parseInt(String(filters.min_experience), 10)
+    if (!isNaN(expNum) && expNum >= 0) {
+      params.append('min_experience', String(expNum))
+    }
+  }
+  if (filters.is_looking_for_job !== undefined && filters.is_looking_for_job !== null) {
+    params.append('is_looking_for_job', String(filters.is_looking_for_job))
+  }
+  if (filters.scope) params.append('scope', filters.scope)
+  if (filters.job_id) params.append('job_id', filters.job_id)
   
   // Salary range
   if (filters.salary_min !== undefined && filters.salary_min !== null && filters.salary_min !== '') {
@@ -467,17 +482,27 @@ export const ApplicationService = {
   /**
    * Get application detail
    */
-  getDetail: (id) => api.get(`/api/applications/${id}`),
+  getDetail: (id) => api.get(`/api/applications/${id}`), // Candidate view
+
+  /**
+   * Get application detail (Recruiter)
+   */
+  getDetailRecruiter: (id) => api.get(`/api/applications/recruiter/${id}`),
 
   /**
    * Get application CV (Recruiter)
    */
-  getCV: (id) => api.get(`/api/applications/${id}/cv`),
+  getCV: (id) => api.get(`/api/applications/${id}/cv`), // Candidate CV (if exposed)
+
+  /**
+   * Get application CV (Recruiter)
+   */
+  getCVRecruiter: (id) => api.get(`/api/applications/recruiter/${id}/cv`),
 
   /**
    * Update application status (Recruiter)
    */
-  updateStatus: (id, data) => api.patch(`/api/applications/${id}/status`, data),
+  updateStatus: (id, data) => api.patch(`/api/applications/recruiter/${id}/status`, data),
 
   /**
    * Bulk update applications (Recruiter)
@@ -487,27 +512,32 @@ export const ApplicationService = {
   /**
    * Get application stages
    */
-  getStages: (id) => api.get(`/api/applications/${id}/stages`),
+  getStages: (id) => api.get(`/api/applications/${id}/stages`), // Candidate stages
+
+  /**
+   * Get application stages (Recruiter)
+   */
+  getStagesRecruiter: (id) => api.get(`/api/applications/recruiter/${id}/stages`),
 
   /**
    * Create application stage (Recruiter)
    */
-  createStage: (id, data) => api.post(`/api/applications/${id}/stage`, data),
+  createStage: (id, data) => api.post(`/api/applications/recruiter/${id}/stage`, data),
 
   /**
    * Update application stage (Recruiter)
    */
-  updateStage: (id, data) => api.patch(`/api/applications/${id}/stage`, data),
+  updateStage: (id, data) => api.patch(`/api/applications/recruiter/${id}/stage`, data),
 
   /**
    * Add application note (Recruiter)
    */
-  addNote: (id, note) => api.post(`/api/applications/${id}/notes`, { note }),
+  addNote: (id, note) => api.post(`/api/applications/recruiter/${id}/notes`, { note }),
 
   /**
    * Contact candidate (Recruiter)
    */
-  contact: (id, data) => api.post(`/api/applications/${id}/contact`, data),
+  contact: (id, data) => api.post(`/api/applications/recruiter/${id}/contact`, data),
 
   /**
    * Get application documents
@@ -521,4 +551,56 @@ export const ApplicationService = {
 
 export const UserService = {
   getPublicProfile: (profileId) => api.get(`/api/user/profiles/${profileId}/public`)
+}
+
+// ============================================
+// CANDIDATE SEARCH SERVICE (Recruiter)
+// ============================================
+
+export const CandidateSearchService = {
+  /**
+   * Search candidates for recruiter
+   * @param {Object} filters - search, skill_names, location_id, min_experience, is_looking_for_job, scope, job_id, page, limit
+   */
+  search: (filters = {}) => {
+    const query = buildQueryString(filters)
+    return api.get(`/api/user/candidates/search${query}`)
+  }
+}
+
+// ============================================
+// CONNECTION INTEREST SERVICE (Recruiter + Candidate)
+// ============================================
+
+export const ConnectionInterestService = {
+  /**
+   * Get connection stats for recruiter dashboard
+   */
+  stats: () => api.get('/api/connection-interests/stats'),
+
+  /**
+   * List connection interests with filters (status, interest_type, role, page, limit)
+   */
+  list: (filters = {}) => {
+    const query = buildQueryString(filters)
+    return api.get(`/api/connection-interests${query}`)
+  },
+
+  /**
+   * Get detail of a connection interest
+   * @param {string} id
+   */
+  getById: (id) => api.get(`/api/connection-interests/${id}`),
+
+  /**
+   * Create a connection interest (Recruiter)
+   * @param {Object} payload - CreateConnectionInterestRequest
+   */
+  create: (payload) => api.post('/api/connection-interests', payload),
+
+  /**
+   * Delete/withdraw a connection interest (Recruiter) when pending
+   * @param {string} id
+   */
+  remove: (id) => api.del(`/api/connection-interests/${id}`)
 }

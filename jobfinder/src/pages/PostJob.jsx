@@ -53,18 +53,40 @@ export default function PostJob() {
   const [lastSaved, setLastSaved] = useState(null)
   
   // Dropdown data
-  const [skills, setSkills] = useState([])
   const [tags, setTags] = useState([])
-  const [locations, setLocations] = useState([])
-  const [selectedSkillsData, setSelectedSkillsData] = useState([]) // Store full skill objects
   const [selectedTagsData, setSelectedTagsData] = useState([]) // Store full tag objects
-  const [skillSearch, setSkillSearch] = useState('')
   const [tagSearch, setTagSearch] = useState('')
-  const [locationSearch, setLocationSearch] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState(null) // Store selected location object
-  const [showSkillDropdown, setShowSkillDropdown] = useState(false)
   const [showTagDropdown, setShowTagDropdown] = useState(false)
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false)
+  
+  // Skill category cascading dropdown states
+  const [skillCategories, setSkillCategories] = useState([])
+  const [initialCategories, setInitialCategories] = useState([]) // Store all categories for search
+  const [selectedCategory, setSelectedCategory] = useState(null)
+  const [categorySearch, setCategorySearch] = useState('')
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+  
+  const [availableSkills, setAvailableSkills] = useState([])
+  const [initialSkills, setInitialSkills] = useState([]) // Store all skills of selected category for search
+  const [selectedSkillsData, setSelectedSkillsData] = useState([]) // Store full skill objects
+  const [skillSearch, setSkillSearch] = useState('')
+  const [showSkillDropdown, setShowSkillDropdown] = useState(false)
+  const [loadingSkills, setLoadingSkills] = useState(false)
+  
+  // Location cascading dropdown states
+  const [provinces, setProvinces] = useState([])
+  const [initialProvinces, setInitialProvinces] = useState([]) // Store all provinces for search
+  const [selectedProvince, setSelectedProvince] = useState(null)
+  const [provinceSearch, setProvinceSearch] = useState('')
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false)
+  
+  const [availableDistricts, setAvailableDistricts] = useState([])
+  const [initialDistricts, setInitialDistricts] = useState([]) // Store all districts for search
+  const [selectedDistrict, setSelectedDistrict] = useState(null)
+  const [districtSearch, setDistrictSearch] = useState('')
+  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false)
+  
+  const [loadingDistricts, setLoadingDistricts] = useState(false)
+  const [isLoadingLocationHierarchy, setIsLoadingLocationHierarchy] = useState(false)
   
   const [form, setForm] = useState({
     title: '',
@@ -225,24 +247,94 @@ export default function PostJob() {
     }
   }, [])
 
-  // Store initial skills and tags separately
-  const [initialSkills, setInitialSkills] = useState([])
+  // Store initial tags separately
   const [initialTags, setInitialTags] = useState([])
 
-  // Load initial skills
+  // Load skill categories on mount
   useEffect(() => {
-    const fetchInitialSkills = async () => {
+    const fetchCategories = async () => {
       try {
-        const response = await SkillService.search({ limit: 50 })
+        const response = await SkillService.getCategories()
         const data = response.data || []
-        setInitialSkills(data)
-        setSkills(data) // Set initial skills
+        setSkillCategories(data)
+        setInitialCategories(data)
       } catch (err) {
-        console.error('Failed to fetch skills:', err)
+        console.error('Failed to fetch skill categories:', err)
       }
     }
-    fetchInitialSkills()
+    fetchCategories()
   }, [])
+
+  // Debounced search for categories
+  useEffect(() => {
+    if (!categorySearch.trim()) {
+      // When search is empty, show all categories
+      setSkillCategories(initialCategories)
+      return
+    }
+    
+    // Filter categories client-side by name
+    const filtered = initialCategories.filter(category =>
+      category.toLowerCase().includes(categorySearch.toLowerCase())
+    )
+    setSkillCategories(filtered)
+  }, [categorySearch, initialCategories])
+
+  // Fetch skills when category is selected
+  useEffect(() => {
+    if (!selectedCategory) {
+      setAvailableSkills([])
+      setInitialSkills([])
+      setSkillSearch('')
+      return
+    }
+
+    const fetchSkillsByCategory = async () => {
+      setLoadingSkills(true)
+      try {
+        const response = await SkillService.search({ category: selectedCategory, limit: 500 })
+        const data = response.data || []
+        
+        // Verify skills belong to selected category (double-check)
+        const filteredData = data.filter(skill => skill.category === selectedCategory)
+        
+        setAvailableSkills(filteredData)
+        setInitialSkills(filteredData) // Store for search filtering
+        
+        // Reset skill selection when category changes
+        setSelectedSkillsData([])
+        setForm(prev => ({ ...prev, skill_ids: [] }))
+        setSkillSearch('')
+      } catch (err) {
+        console.error('Failed to fetch skills by category:', err)
+        setAvailableSkills([])
+        setInitialSkills([])
+      } finally {
+        setLoadingSkills(false)
+      }
+    }
+
+    fetchSkillsByCategory()
+  }, [selectedCategory])
+
+  // Debounced search for skills within selected category
+  useEffect(() => {
+    if (!selectedCategory) {
+      return
+    }
+    
+    if (!skillSearch.trim()) {
+      // When search is empty, show all skills of selected category
+      setAvailableSkills(initialSkills)
+      return
+    }
+    
+    // Filter skills client-side by name
+    const filtered = initialSkills.filter(skill =>
+      skill.name.toLowerCase().includes(skillSearch.toLowerCase())
+    )
+    setAvailableSkills(filtered)
+  }, [skillSearch, initialSkills, selectedCategory])
 
   // Load initial tags
   useEffect(() => {
@@ -258,24 +350,6 @@ export default function PostJob() {
     }
     fetchInitialTags()
   }, [])
-
-  // Debounced search for skills
-  useEffect(() => {
-    if (!skillSearch.trim()) {
-      // When search is empty, show initial skills
-      setSkills(initialSkills)
-      return
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const response = await SkillService.search({ search: skillSearch, limit: 20 })
-        setSkills(response.data || [])
-      } catch (err) {
-        console.error('Failed to search skills:', err)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [skillSearch, initialSkills])
 
   // Debounced search for tags
   useEffect(() => {
@@ -295,41 +369,178 @@ export default function PostJob() {
     return () => clearTimeout(timer)
   }, [tagSearch, initialTags])
 
-  // Store initial locations separately
-  const [initialLocations, setInitialLocations] = useState([])
-
-  // Load initial locations
+  // Load provinces on mount (fetch many and filter client-side to avoid pagination gaps)
   useEffect(() => {
-    const fetchInitialLocations = async () => {
+    const fetchProvinces = async () => {
       try {
-        const response = await LocationService.list({ limit: 50 })
-        const data = response.data || []
-        setInitialLocations(data)
-        setLocations(data) // Set initial locations
+        // Fetch with a large limit to avoid missing provinces due to pagination
+        let response = await LocationService.list({ limit: 1000 })
+        let data = response.data || []
+
+        // Fallback: if still empty, try typed queries (some datasets use different type naming)
+        if (data.length === 0) {
+          response = await LocationService.list({ type: 'tinh', limit: 1000 })
+          data = response.data || []
+        }
+        if (data.length === 0) {
+          response = await LocationService.list({ type: 'province', limit: 1000 })
+          data = response.data || []
+        }
+
+        // Filter client-side by multiple possible province type aliases
+        const provinceTypeAliases = ['tinh', 'province', 'thanh-pho', 'city', 'tp', 'thanhpho']
+        data = data.filter(loc => {
+          if (!loc.type) return false
+          const t = String(loc.type).toLowerCase()
+          return provinceTypeAliases.some(alias => t.includes(alias))
+        })
+
+        setProvinces(data)
+        setInitialProvinces(data) // Store for search filtering
       } catch (err) {
-        console.error('Failed to fetch locations:', err)
+        console.error('Failed to fetch provinces:', err)
       }
     }
-    fetchInitialLocations()
+    fetchProvinces()
   }, [])
 
-  // Debounced search for locations
+  // Debounced search for provinces
   useEffect(() => {
-    if (!locationSearch.trim()) {
-      // When search is empty, show initial locations
-      setLocations(initialLocations)
+    if (!provinceSearch.trim()) {
+      // When search is empty, show all provinces
+      setProvinces(initialProvinces)
       return
     }
-    const timer = setTimeout(async () => {
+    
+    // Filter provinces client-side by name
+    const filtered = initialProvinces.filter(province =>
+      province.name.toLowerCase().includes(provinceSearch.toLowerCase())
+    )
+    setProvinces(filtered)
+  }, [provinceSearch, initialProvinces])
+
+  // Debounced search for districts
+  useEffect(() => {
+    if (!districtSearch.trim()) {
+      // When search is empty, show all districts
+      setAvailableDistricts(initialDistricts)
+      return
+    }
+    
+    // Filter districts client-side by name
+    const filtered = initialDistricts.filter(district =>
+      district.name.toLowerCase().includes(districtSearch.toLowerCase())
+    )
+    setAvailableDistricts(filtered)
+  }, [districtSearch, initialDistricts])
+
+  // Fetch districts when province is selected
+  useEffect(() => {
+    if (!selectedProvince) {
+      setAvailableDistricts([])
+      setInitialDistricts([])
+      setDistrictSearch('')
+      // Only reset district if not loading location hierarchy
+      if (!isLoadingLocationHierarchy) {
+        setSelectedDistrict(null)
+      }
+      return
+    }
+
+    const fetchDistricts = async () => {
+      setLoadingDistricts(true)
       try {
-        const response = await LocationService.list({ search: locationSearch, limit: 20 })
-        setLocations(response.data || [])
+        const response = await LocationService.getChildren(selectedProvince.id)
+        const data = response.data || []
+        setAvailableDistricts(data)
+        setInitialDistricts(data) // Store for search filtering
+        
+        // Reset district selection when province changes, but not if loading hierarchy
+        if (!isLoadingLocationHierarchy) {
+          setSelectedDistrict(null)
+          setDistrictSearch('')
+          setForm(prev => ({ ...prev, location_id: '' }))
+        }
       } catch (err) {
-        console.error('Failed to search locations:', err)
+        console.error('Failed to fetch districts:', err)
+        setAvailableDistricts([])
+        setInitialDistricts([])
+      } finally {
+        setLoadingDistricts(false)
+      }
+    }
+
+    fetchDistricts()
+  }, [selectedProvince, isLoadingLocationHierarchy])
+
+  // Handle existing location_id when editing (if location_id exists in form)
+  useEffect(() => {
+    const loadLocationHierarchy = async () => {
+      if (!form.location_id || form.location_id.trim() === '') {
+        return
+      }
+
+      // Skip if already loaded
+      if (selectedProvince && selectedDistrict && selectedDistrict.id === form.location_id) {
+        return
+      }
+
+      setIsLoadingLocationHierarchy(true)
+      try {
+        // Get the location by ID
+        const locationResponse = await LocationService.getById(form.location_id)
+        const location = locationResponse.data
+        
+        if (!location) {
+          setIsLoadingLocationHierarchy(false)
+          return
+        }
+
+        // If location has parent_id, it's a district - need to load province
+        if (location.parent_id) {
+          // Get the parent (province)
+          const provinceResponse = await LocationService.getById(location.parent_id)
+          const province = provinceResponse.data
+          
+          if (province) {
+            setSelectedProvince(province)
+            setProvinceSearch(province.name)
+            // Districts will be loaded by the useEffect above
+            
+            // Wait for districts to load, then set the selected district
+            setTimeout(async () => {
+              try {
+                const districtsResponse = await LocationService.getChildren(province.id)
+                const districts = districtsResponse.data || []
+                setAvailableDistricts(districts)
+                setInitialDistricts(districts)
+                
+                const district = districts.find(d => d.id === form.location_id)
+                if (district) {
+                  setSelectedDistrict(district)
+                  setDistrictSearch(district.name)
+                }
+              } finally {
+                setIsLoadingLocationHierarchy(false)
       }
     }, 300)
-    return () => clearTimeout(timer)
-  }, [locationSearch, initialLocations])
+          } else {
+            setIsLoadingLocationHierarchy(false)
+          }
+        } else {
+          // If no parent_id, it's a province itself
+          setSelectedProvince(location)
+          setProvinceSearch(location.name)
+          setIsLoadingLocationHierarchy(false)
+        }
+      } catch (err) {
+        console.error('Failed to load location hierarchy:', err)
+        setIsLoadingLocationHierarchy(false)
+      }
+    }
+
+    loadLocationHierarchy()
+  }, [form.location_id]) // Run when location_id changes
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -353,6 +564,40 @@ export default function PostJob() {
         return newErrors
       })
     }
+  }
+
+  // Handle province selection
+  const handleProvinceSelect = (province) => {
+    setSelectedProvince(province)
+    setProvinceSearch(province.name)
+    setShowProvinceDropdown(false)
+    // Districts will be loaded by useEffect
+  }
+
+  // Handle district selection
+  const handleDistrictSelect = (district) => {
+    setSelectedDistrict(district)
+    setDistrictSearch(district.name)
+    setShowDistrictDropdown(false)
+    setForm(prev => ({ ...prev, location_id: district.id }))
+  }
+
+  // Clear province selection
+  const handleClearProvince = () => {
+    setSelectedProvince(null)
+    setProvinceSearch('')
+    setAvailableDistricts([])
+    setInitialDistricts([])
+    setSelectedDistrict(null)
+    setDistrictSearch('')
+    setForm(prev => ({ ...prev, location_id: '' }))
+  }
+
+  // Clear district selection
+  const handleClearDistrict = () => {
+    setSelectedDistrict(null)
+    setDistrictSearch('')
+    setForm(prev => ({ ...prev, location_id: '' }))
   }
 
   // Requirements handlers
@@ -414,6 +659,23 @@ export default function PostJob() {
     })
   }
 
+  // Category handlers
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category)
+    setCategorySearch(category)
+    setShowCategoryDropdown(false)
+  }
+
+  const handleClearCategory = () => {
+    setSelectedCategory(null)
+    setCategorySearch('')
+    setAvailableSkills([])
+    setInitialSkills([])
+    setSelectedSkillsData([])
+    setForm(prev => ({ ...prev, skill_ids: [] }))
+    setSkillSearch('')
+  }
+
   // Skills handlers
   const addSkill = (skill) => {
     if (!form.skill_ids.includes(skill.id)) {
@@ -468,6 +730,16 @@ export default function PostJob() {
     }
     if (!form.company_id) {
       errors.company_id = 'Vui lòng chọn công ty'
+    }
+    
+    // Location validation - require both province and district if location is selected
+    if (form.location_id && form.location_id.trim() !== '') {
+      if (!selectedProvince) {
+        errors.province = 'Vui lòng chọn tỉnh/thành phố'
+      }
+      if (!selectedDistrict) {
+        errors.district = 'Vui lòng chọn quận/huyện/xã'
+      }
     }
     
     // Salary validation
@@ -648,9 +920,17 @@ export default function PostJob() {
       })
       setSelectedSkillsData([])
       setSelectedTagsData([])
-      setLocationSearch('')
-      setSelectedLocation(null)
+      setSelectedCategory(null)
+      setCategorySearch('')
+      setAvailableSkills([])
+      setInitialSkills([])
       setSkillSearch('')
+      setSelectedProvince(null)
+      setProvinceSearch('')
+      setSelectedDistrict(null)
+      setDistrictSearch('')
+      setAvailableDistricts([])
+      setInitialDistricts([])
       setTagSearch('')
       setError(null)
       setFieldErrors({})
@@ -914,23 +1194,13 @@ export default function PostJob() {
 
             <div className="field-group">
               <label className="field">
-                <span>Địa điểm</span>
-                {form.location_id && form.location_id.trim() !== '' ? (
+                <span>Tỉnh/Thành phố *</span>
+                {selectedProvince ? (
                   <div className="selected-item">
-                    <span>
-                      {selectedLocation?.name || 
-                       locations.find(l => l.id === form.location_id)?.name ||
-                       initialLocations.find(l => l.id === form.location_id)?.name ||
-                       'Đã chọn'}
-                    </span>
+                    <span>{selectedProvince.name}</span>
                     <button 
                       type="button"
-                      onClick={() => {
-                        setForm(prev => ({ ...prev, location_id: '' }))
-                        setLocationSearch('')
-                        setSelectedLocation(null)
-                        setShowLocationDropdown(false)
-                      }}
+                      onClick={handleClearProvince}
                     >
                       ×
                     </button>
@@ -939,51 +1209,143 @@ export default function PostJob() {
                   <div className="autocomplete-wrapper">
                     <input 
                       type="text"
-                      value={locationSearch}
+                      value={provinceSearch}
                       onChange={(e) => {
-                        setLocationSearch(e.target.value)
-                        setShowLocationDropdown(true)
+                        setProvinceSearch(e.target.value)
+                        setShowProvinceDropdown(true)
                       }}
                       onFocus={() => {
-                        setShowLocationDropdown(true)
-                        // Show initial locations when focused and no search text
-                        if (!locationSearch.trim() && initialLocations.length > 0) {
-                          setLocations(initialLocations)
+                        setShowProvinceDropdown(true)
+                        if (!provinceSearch.trim() && initialProvinces.length > 0) {
+                          setProvinces(initialProvinces)
                         }
                       }}
                       onBlur={(e) => {
-                        // Delay hiding dropdown to allow click on item
                         setTimeout(() => {
                           const activeElement = document.activeElement
                           if (!activeElement || !activeElement.closest('.autocomplete-dropdown')) {
-                            setShowLocationDropdown(false)
+                            setShowProvinceDropdown(false)
                           }
                         }, 150)
                       }}
-                      placeholder="Tìm kiếm địa điểm..."
+                      placeholder="Tìm kiếm tỉnh/thành phố..."
+                      className={fieldErrors.province ? 'error' : ''}
                     />
-                    {showLocationDropdown && locations.length > 0 && (
+                    {showProvinceDropdown && provinces.length > 0 && (
                       <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
-                        {locations.map(loc => (
+                        {provinces.map(province => (
                           <div 
-                            key={loc.id}
+                            key={province.id}
                             className="autocomplete-item"
                             onMouseDown={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              // Set both state updates together
-                              setSelectedLocation(loc)
-                              setForm(prev => ({ ...prev, location_id: loc.id }))
-                              setLocationSearch('')
-                              setShowLocationDropdown(false)
+                              handleProvinceSelect(province)
                             }}
                           >
-                            {loc.name}
+                            {province.name}
                           </div>
                         ))}
                       </div>
                     )}
+                    {showProvinceDropdown && provinces.length === 0 && provinceSearch.trim() && (
+                      <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                        <div className="autocomplete-item" style={{ color: '#999', fontStyle: 'italic' }}>
+                          Không tìm thấy tỉnh/thành phố nào
+                        </div>
+                      </div>
+                    )}
                   </div>
+                )}
+                {fieldErrors.province && (
+                  <small className="error-text">{fieldErrors.province}</small>
+                )}
+                {!selectedProvince && !fieldErrors.province && (
+                  <small className="muted">Vui lòng chọn tỉnh/thành phố trước</small>
+                )}
+              </label>
+              <label className="field">
+                <span>Quận/Huyện/Xã *</span>
+                {selectedDistrict ? (
+                  <div className="selected-item">
+                    <span>{selectedDistrict.name}</span>
+                    <button 
+                      type="button"
+                      onClick={handleClearDistrict}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="autocomplete-wrapper">
+                    <input 
+                      type="text"
+                      value={districtSearch}
+                      onChange={(e) => {
+                        setDistrictSearch(e.target.value)
+                        setShowDistrictDropdown(true)
+                      }}
+                      onFocus={() => {
+                        if (!selectedProvince) {
+                          return // Don't show dropdown if no province selected
+                        }
+                        setShowDistrictDropdown(true)
+                        if (!districtSearch.trim() && initialDistricts.length > 0) {
+                          setAvailableDistricts(initialDistricts)
+                        }
+                      }}
+                      onBlur={(e) => {
+                        setTimeout(() => {
+                          const activeElement = document.activeElement
+                          if (!activeElement || !activeElement.closest('.autocomplete-dropdown')) {
+                            setShowDistrictDropdown(false)
+                          }
+                        }, 150)
+                      }}
+                      placeholder={
+                        loadingDistricts 
+                          ? 'Đang tải danh sách quận/huyện/xã...' 
+                          : !selectedProvince 
+                            ? 'Vui lòng chọn tỉnh/thành phố trước' 
+                            : 'Tìm kiếm quận/huyện/xã...'
+                      }
+                      disabled={!selectedProvince || loadingDistricts}
+                      className={fieldErrors.district ? 'error' : ''}
+                    />
+                    {showDistrictDropdown && selectedProvince && !loadingDistricts && availableDistricts.length > 0 && (
+                      <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                        {availableDistricts.map(district => (
+                          <div 
+                            key={district.id}
+                            className="autocomplete-item"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDistrictSelect(district)
+                            }}
+                          >
+                            {district.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showDistrictDropdown && selectedProvince && !loadingDistricts && availableDistricts.length === 0 && districtSearch.trim() && (
+                      <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                        <div className="autocomplete-item" style={{ color: '#999', fontStyle: 'italic' }}>
+                          Không tìm thấy quận/huyện/xã nào
+                        </div>
+                  </div>
+                    )}
+                  </div>
+                )}
+                {fieldErrors.district && (
+                  <small className="error-text">{fieldErrors.district}</small>
+                )}
+                {selectedProvince && availableDistricts.length === 0 && !loadingDistricts && !districtSearch.trim() && (
+                  <small className="muted">Không có quận/huyện/xã nào cho tỉnh này</small>
+                )}
+                {selectedProvince && availableDistricts.length > 0 && !selectedDistrict && !fieldErrors.district && (
+                  <small className="muted">Vui lòng chọn quận/huyện/xã</small>
                 )}
               </label>
             </div>
@@ -1243,6 +1605,73 @@ export default function PostJob() {
           <div className="tab-content">
             <div className="field-group">
               <label className="field">
+                <span>Danh mục kỹ năng *</span>
+                {selectedCategory ? (
+                  <div className="selected-item">
+                    <span>{selectedCategory}</span>
+                    <button 
+                      type="button"
+                      onClick={handleClearCategory}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="autocomplete-wrapper">
+                    <input 
+                      type="text"
+                      value={categorySearch}
+                      onChange={(e) => {
+                        setCategorySearch(e.target.value)
+                        setShowCategoryDropdown(true)
+                      }}
+                      onFocus={() => {
+                        setShowCategoryDropdown(true)
+                        if (!categorySearch.trim() && initialCategories.length > 0) {
+                          setSkillCategories(initialCategories)
+                        }
+                      }}
+                      onBlur={(e) => {
+                        setTimeout(() => {
+                          const activeElement = document.activeElement
+                          if (!activeElement || !activeElement.closest('.autocomplete-dropdown')) {
+                            setShowCategoryDropdown(false)
+                          }
+                        }, 150)
+                      }}
+                      placeholder="Tìm kiếm hoặc chọn danh mục..."
+                    />
+                    {showCategoryDropdown && skillCategories.length > 0 && (
+                      <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                        {skillCategories.map((category, index) => (
+                          <div 
+                            key={index}
+                            className="autocomplete-item"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleCategorySelect(category)
+                            }}
+                          >
+                            {category}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showCategoryDropdown && skillCategories.length === 0 && categorySearch.trim() && (
+                      <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                        <div className="autocomplete-item" style={{ color: '#999', fontStyle: 'italic' }}>
+                          Không tìm thấy danh mục nào
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!selectedCategory && (
+                  <small className="muted">Vui lòng chọn danh mục trước</small>
+                )}
+              </label>
+              <label className="field">
                 <span>Kỹ năng</span>
                 <div className="autocomplete-wrapper">
                   <input 
@@ -1253,25 +1682,34 @@ export default function PostJob() {
                       setShowSkillDropdown(true)
                     }}
                     onFocus={() => {
+                      if (!selectedCategory) {
+                        return
+                      }
                       setShowSkillDropdown(true)
-                      // Show initial skills when focused and no search text
                       if (!skillSearch.trim() && initialSkills.length > 0) {
-                        setSkills(initialSkills)
+                        setAvailableSkills(initialSkills)
                       }
                     }}
                     onBlur={(e) => {
-                      // Delay hiding dropdown to allow click on item
                       setTimeout(() => {
-                        if (!e.relatedTarget || !e.relatedTarget.closest('.autocomplete-dropdown')) {
+                        const activeElement = document.activeElement
+                        if (!activeElement || !activeElement.closest('.autocomplete-dropdown')) {
                           setShowSkillDropdown(false)
                         }
-                      }, 200)
+                      }, 150)
                     }}
-                    placeholder="Tìm kiếm kỹ năng..."
+                    placeholder={
+                      loadingSkills 
+                        ? 'Đang tải danh sách kỹ năng...' 
+                        : !selectedCategory 
+                          ? 'Vui lòng chọn danh mục trước' 
+                          : 'Tìm kiếm kỹ năng...'
+                    }
+                    disabled={!selectedCategory || loadingSkills}
                   />
-                  {showSkillDropdown && skills.length > 0 && (
+                  {showSkillDropdown && selectedCategory && !loadingSkills && availableSkills.length > 0 && (
                     <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
-                      {skills
+                      {availableSkills
                         .filter(skill => !form.skill_ids.includes(skill.id))
                         .map(skill => (
                           <div 
@@ -1289,7 +1727,17 @@ export default function PostJob() {
                         ))}
                     </div>
                   )}
+                  {showSkillDropdown && selectedCategory && !loadingSkills && availableSkills.length === 0 && skillSearch.trim() && (
+                    <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                      <div className="autocomplete-item" style={{ color: '#999', fontStyle: 'italic' }}>
+                        Không tìm thấy kỹ năng nào
                 </div>
+                    </div>
+                  )}
+                </div>
+                {selectedCategory && availableSkills.length === 0 && !loadingSkills && !skillSearch.trim() && (
+                  <small className="muted">Không có kỹ năng nào trong danh mục này</small>
+                )}
                 {form.skill_ids.length > 0 && (
                   <div className="selected-items">
                     {selectedSkillsData.map(skill => (
@@ -1509,7 +1957,13 @@ export default function PostJob() {
               </div>
               <div>
                 <strong style={{ color: '#64748b', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Địa điểm:</strong>
-                <span>{locations.find(l => l.id === form.location_id)?.name || 'Chưa chọn'}</span>
+                <span>
+                  {selectedDistrict 
+                    ? `${selectedDistrict.name}, ${selectedProvince?.name || ''}` 
+                    : selectedProvince 
+                      ? selectedProvince.name 
+                      : 'Chưa chọn'}
+                </span>
               </div>
               <div>
                 <strong style={{ color: '#64748b', fontSize: '13px', display: 'block', marginBottom: '4px' }}>Kinh nghiệm:</strong>

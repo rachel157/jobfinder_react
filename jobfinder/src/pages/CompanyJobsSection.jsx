@@ -3,12 +3,22 @@ import JobCard from '../components/JobCard.jsx'
 
 const normalizeJobForCard = (job) => {
   const range = job.salary_range || job.salaryRange || {}
+  
+  // Get company logo from multiple possible locations
+  const companyLogoUrl = 
+    job.companyLogoUrl || 
+    job.company?.logo_url || 
+    job.company?.logoUrl ||
+    job.logo_url ||
+    job.logoUrl ||
+    null
+  
   return {
     id: job.id,
     title: job.title,
-    companyName: job.company?.name || job.companyName,
-    companyLogoUrl: job.company?.logo_url || job.logo_url,
-    location: job.location?.name || job.location || 'Bất kỳ',
+    companyName: job.company?.name || job.companyName || 'Chưa có tên công ty',
+    companyLogoUrl: companyLogoUrl,
+    location: job.location?.name || job.locations?.name || job.location || 'Bất kỳ',
     jobType: job.job_type || job.jobType,
     experienceLevel: job.experience_level || job.experienceLevel,
     salary_range: range,

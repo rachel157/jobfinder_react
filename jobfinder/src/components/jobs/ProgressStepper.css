@@ -20,32 +20,42 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   font-weight: 600;
   font-size: 14px;
   transition: all 0.3s ease;
   flex-shrink: 0;
   position: relative;
   z-index: 2;
-  padding: 0;
-  margin: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
   box-sizing: border-box;
 }
 
 .step-number {
-  display: block;
-  margin: 0;
-  padding: 0;
-  line-height: 1;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100%;
+  height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
   font-size: 14px;
   font-weight: 600;
   text-align: center;
-  /* Điều chỉnh vị trí để căn giữa hoàn hảo - đẩy xuống 0.5px và sang phải 0.5px */
-  transform: translate(0.5px, 0.5px);
-  /* Đảm bảo transform không bị ảnh hưởng bởi transition */
-  transition: transform 0s;
+  transform: none !important;
+  transition: none;
+  /* Đảm bảo số được căn giữa hoàn hảo */
+  vertical-align: middle;
+  /* Điều chỉnh cho font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .step-indicator svg {
@@ -66,6 +76,18 @@
   border: 2px solid #3b6ee7;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
   transform: scale(1.1);
+  /* Đảm bảo số vẫn căn giữa khi scale */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.step-active .step-number {
+  /* Đảm bảo số không bị ảnh hưởng bởi transform scale */
+  transform: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .step-completed .step-indicator {
@@ -142,8 +164,7 @@
 
   .step-number {
     font-size: 12px;
-    /* Điều chỉnh cho màn hình nhỏ */
-    transform: translate(0.4px, 0.4px);
+    transform: none;
   }
 
   .step-indicator svg {

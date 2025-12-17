@@ -51,7 +51,7 @@ export const adminApi = {
    * @param {string} userId - UUID của user
    */
   deleteUser: async (userId) => {
-    return api.delete(`/api/admin/users/${userId}`)
+    return api.del(`/api/admin/users/${userId}`)
   },
 
   // ==================== JOB MANAGEMENT ====================
