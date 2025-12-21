@@ -340,26 +340,62 @@ export const SkillService = {
 
 export const LocationService = {
   /**
-   * Search locations
-   * @param {Object} params - Search parameters (search, type, parent_id, limit, offset)
-   * @returns {Promise<{data: Array, pagination: Object}>}
+   * Get all provinces (tỉnh/thành)
+   * @returns {Promise<{data: Array}>}
    */
-  list: (params) => {
-    const query = buildQueryString(params)
-    return api.get(`/api/locations${query}`)
-  },
+  getProvinces: () => api.get('/api/locations/provinces'),
   /**
-   * Get location by ID
+   * Get districts by province ID
+   * @param {string} provinceId - Province ID
+   * @returns {Promise<{data: Array}>}
+   */
+  getDistricts: (provinceId) => api.get(`/api/locations/districts?province_id=${provinceId}`),
+  /**
+   * Get location by ID (includes children if province, parent if district)
    * @param {string} id - Location ID
    * @returns {Promise<{data: Object}>}
    */
   getById: (id) => api.get(`/api/locations/${id}`),
   /**
-   * Get child locations by parent ID
+   * Search locations by name
+   * @param {Object} params - Search parameters (search, limit)
+   * @returns {Promise<{data: Array}>}
+   */
+  search: (params) => {
+    const { search, limit } = params || {}
+    if (!search) {
+      return Promise.reject(new Error('search parameter is required'))
+    }
+    const query = limit ? `?search=${encodeURIComponent(search)}&limit=${limit}` : `?search=${encodeURIComponent(search)}`
+    return api.get(`/api/locations/search${query}`)
+  },
+  /**
+   * Get child locations by parent ID (for backward compatibility)
+   * Uses getById which returns children if it's a province
    * @param {string} id - Parent location ID
    * @returns {Promise<{data: Array}>}
    */
-  getChildren: (id) => api.get(`/api/locations/${id}/children`)
+  getChildren: async (id) => {
+    const response = await api.get(`/api/locations/${id}`)
+    // If location has children, return them, otherwise return empty array
+    return { data: response.data?.children || [] }
+  },
+  /**
+   * List locations (for backward compatibility - maps to getProvinces)
+   * @param {Object} params - Search parameters (deprecated, use getProvinces or search instead)
+   * @returns {Promise<{data: Array}>}
+   */
+  list: async (params) => {
+    // If type is specified, try to use appropriate endpoint
+    if (params?.type) {
+      const type = String(params.type).toLowerCase()
+      if (type === 'tinh' || type === 'province' || type.includes('province') || type.includes('tinh')) {
+        return api.get('/api/locations/provinces')
+      }
+    }
+    // Default to provinces
+    return api.get('/api/locations/provinces')
+  }
 }
 
 export const TagService = {

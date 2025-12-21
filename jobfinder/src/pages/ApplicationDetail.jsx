@@ -148,15 +148,6 @@ export default function ApplicationDetail() {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   
-  // Contact
-  const [showContactModal, setShowContactModal] = useState(false)
-  const [contactForm, setContactForm] = useState({
-    subject: '',
-    message: '',
-    send_email: false
-  })
-  const [sendingContact, setSendingContact] = useState(false)
-  
   // Profile modal
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [fullProfile, setFullProfile] = useState(null)
@@ -315,24 +306,6 @@ export default function ApplicationDetail() {
       alert(err?.message || 'Không thể thêm ghi chú. Vui lòng thử lại.')
     } finally {
       setAddingNote(false)
-    }
-  }
-
-  const handleContact = async () => {
-    if (!contactForm.subject.trim() || !contactForm.message.trim()) {
-      alert('Vui lòng điền đầy đủ thông tin.')
-      return
-    }
-    setSendingContact(true)
-    try {
-      await ApplicationService.contact(id, contactForm)
-      alert('Đã gửi tin nhắn thành công.')
-      setShowContactModal(false)
-      setContactForm({ subject: '', message: '', send_email: false })
-    } catch (err) {
-      alert(err?.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.')
-    } finally {
-      setSendingContact(false)
     }
   }
 
@@ -760,17 +733,6 @@ export default function ApplicationDetail() {
             </div>
           </Card>
 
-          {/* Contact Section */}
-          <Card padding="medium" className="contact-card">
-            <h2 className="section-title">Liên hệ ứng viên</h2>
-            <Button 
-              variant="primary" 
-              onClick={() => setShowContactModal(true)}
-              style={{ width: '100%' }}
-            >
-              Gửi tin nhắn
-            </Button>
-          </Card>
         </div>
       </div>
 
@@ -862,44 +824,6 @@ export default function ApplicationDetail() {
           <Button onClick={submitEditStage}>
             Lưu thay đổi
           </Button>
-        </div>
-      </Modal>
-
-      {/* Contact Modal */}
-      <Modal isOpen={showContactModal} onClose={() => setShowContactModal(false)}>
-        <h3 style={{ marginTop: 0 }}>Liên hệ ứng viên</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <Input
-            placeholder="Tiêu đề"
-            value={contactForm.subject}
-            onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-          />
-          <Textarea
-            placeholder="Nội dung tin nhắn"
-            value={contactForm.message}
-            onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-            rows={5}
-          />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              checked={contactForm.send_email}
-              onChange={(e) => setContactForm({ ...contactForm, send_email: e.target.checked })}
-            />
-            <span>Gửi email thông báo</span>
-          </label>
-          <div className="modal-actions">
-            <Button variant="outline" onClick={() => setShowContactModal(false)}>
-              Hủy
-            </Button>
-            <Button 
-              variant="primary" 
-              onClick={handleContact}
-              disabled={sendingContact}
-            >
-              {sendingContact ? 'Đang gửi...' : 'Gửi tin nhắn'}
-            </Button>
-          </div>
         </div>
       </Modal>
 

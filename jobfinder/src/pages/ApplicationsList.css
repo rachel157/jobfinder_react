@@ -82,6 +82,11 @@
   border-color: #f87171;
 }
 
+.stat-item.stat-withdrawn {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
 .stat-value {
   font-size: 32px;
   font-weight: 700;

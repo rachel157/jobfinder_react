@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, forwardRef } from 'react'
 import ProfessionalTemplate from './templates/ProfessionalTemplate'
 import TimelineTemplate from './templates/TimelineTemplate'
 import CompactTemplate from './templates/CompactTemplate'
 
-export default function CVPreview({ profileData, title, theme = 'professional', onClose, hideHeader = false, additionalData = {} }) {
+function CVPreviewComponent({ profileData, title, theme = 'professional', onClose, hideHeader = false, additionalData = {} }, ref) {
   const [fullscreen, setFullscreen] = useState(false)
 
   if (!profileData) {
@@ -57,14 +57,35 @@ export default function CVPreview({ profileData, title, theme = 'professional', 
 
   // Select template component based on theme
   const renderTemplate = () => {
-    switch (theme) {
-      case 'timeline':
-        return <TimelineTemplate data={templateData} title={title} />
-      case 'compact':
-        return <CompactTemplate data={templateData} title={title} />
-      case 'professional':
-      default:
-        return <ProfessionalTemplate data={templateData} title={title} />
+    try {
+      const validTheme = theme || 'professional'
+      switch (validTheme) {
+        case 'timeline':
+          if (TimelineTemplate) {
+            return <TimelineTemplate data={templateData} title={title} />
+          }
+          break
+        case 'compact':
+          if (CompactTemplate) {
+            return <CompactTemplate data={templateData} title={title} />
+          }
+          break
+        case 'professional':
+        default:
+          if (ProfessionalTemplate) {
+            return <ProfessionalTemplate data={templateData} title={title} />
+          }
+          break
+      }
+      // Fallback to ProfessionalTemplate
+      return <ProfessionalTemplate data={templateData} title={title} />
+    } catch (error) {
+      console.error('Error rendering template:', error)
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p style={{ color: '#ef4444' }}>Lỗi khi render template. Vui lòng thử lại.</p>
+        </div>
+      )
     }
   }
 
@@ -111,7 +132,7 @@ export default function CVPreview({ profileData, title, theme = 'professional', 
         )}
 
         <div className="cv-preview__content">
-          <div className="cv-preview__document">
+          <div className="cv-preview__document" ref={ref}>
             {renderTemplate()}
           </div>
         </div>
@@ -128,3 +149,9 @@ export default function CVPreview({ profileData, title, theme = 'professional', 
     </>
   )
 }
+
+const CVPreview = forwardRef(CVPreviewComponent)
+
+CVPreview.displayName = 'CVPreview'
+
+export default CVPreview

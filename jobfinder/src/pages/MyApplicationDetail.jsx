@@ -129,7 +129,33 @@ export default function MyApplicationDetail() {
           </div>
           <div className="info-row">
             <span className="muted">Stage hiện tại</span>
-            <span>{application.current_stage?.stage_name || '--'}</span>
+            <span>
+              {(() => {
+                // Try to get current_stage from application data
+                if (application.current_stage?.stage_name) {
+                  return application.current_stage.stage_name
+                }
+                
+                // If not available, find from stages array
+                // Priority: in_progress > pending > scheduled > first stage
+                if (stages && stages.length > 0) {
+                  const inProgressStage = stages.find(s => s.status === 'in_progress')
+                  if (inProgressStage) return inProgressStage.stage_name
+                  
+                  const pendingStage = stages.find(s => s.status === 'pending')
+                  if (pendingStage) return pendingStage.stage_name
+                  
+                  const scheduledStage = stages.find(s => s.status === 'scheduled')
+                  if (scheduledStage) return scheduledStage.stage_name
+                  
+                  // Return first stage by order
+                  const sortedStages = [...stages].sort((a, b) => (a.stage_order || 0) - (b.stage_order || 0))
+                  if (sortedStages.length > 0) return sortedStages[0].stage_name
+                }
+                
+                return '--'
+              })()}
+            </span>
           </div>
           <div className="info-row">
             <span className="muted">CV</span>

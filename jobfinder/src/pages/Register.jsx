@@ -34,16 +34,16 @@ export default function Register() {
     setError("")
     setSuccess("")
     if (!form.name || !form.email || !form.password || !form.confirm_password || !form.date_of_birth) {
-      setError("Vui long dien day du thong tin bat buoc.")
+      setError("Vui lòng điền đầy đủ thông tin bắt buộc.")
       return
     }
     const hasSpecial = passwordSpecial.test(form.password)
     if (form.password.length < 10 || !hasSpecial) {
-      setError("Mat khau phai dai toi thieu 10 ky tu va chua ky tu dac biet.")
+      setError("Mật khẩu phải dài tối thiểu 10 ký tự và chứa ký tự đặc biệt.")
       return
     }
     if (form.password !== form.confirm_password) {
-      setError("Xac nhan mat khau khong khop.")
+      setError("Xác nhận mật khẩu không khớp.")
       return
     }
     setLoading(true)
@@ -58,9 +58,9 @@ export default function Register() {
         date_of_birth: form.date_of_birth,
       }
       await AuthClient.register(payload)
-      setSuccess("Da dang ky thanh cong. Vui long kiem tra email de xac thuc tai khoan roi quay lai dang nhap.")
+      setSuccess("Đã đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản rồi quay lại đăng nhập.")
     } catch (err) {
-      setError(err?.data?.message || err?.message || "Dang ky that bai.")
+      setError(err?.data?.message || err?.message || "Đăng ký thất bại.")
     } finally {
       setLoading(false)
     }
@@ -80,28 +80,28 @@ export default function Register() {
             <span className="brand-badge">JF</span>
             <span>JobFinder</span>
           </div>
-          <h2 style={{ margin: "0 0 6px" }}>Tao tai khoan</h2>
-          <div className="muted">Gia nhap cong dong nhan tai va nha tuyen dung chat luong.</div>
+          <h2 style={{ margin: "0 0 6px" }}>Tạo tài khoản</h2>
+          <div className="muted">Gia nhập cộng đồng nhân tài và nhà tuyển dụng chất lượng.</div>
           <ul className="auth-points">
-            <li>Ung tuyen / Dang tuyen de dang</li>
-            <li>Goi y phu hop theo ho so</li>
-            <li>Quan ly don ung tuyen thuan tien</li>
+            <li>Ứng tuyển / Đăng tuyển dễ dàng</li>
+            <li>Gợi ý phù hợp theo hồ sơ</li>
+            <li>Quản lý đơn ứng tuyển thuận tiện</li>
           </ul>
         </div>
 
         <div className="auth-form">
           <div className="tabs">
             <button className={"tab" + (tab === "candidate" ? " active" : "")} onClick={() => setTab("candidate")}>
-              Ung vien (Candidate)
+              Ứng viên (Candidate)
             </button>
             <button className={"tab" + (tab === "recruiter" ? " active" : "")} onClick={() => setTab("recruiter")}>
-              Nha tuyen dung (Recruiter)
+              Nhà tuyển dụng (Recruiter)
             </button>
           </div>
 
           <form onSubmit={onSubmit} className="form-grid">
             <label className="field">
-              <span>Ho va ten</span>
+              <span>Họ và tên</span>
               <input name="name" value={form.name} onChange={onChange} placeholder="Nguyen Van A" required />
             </label>
             <label className="field">
@@ -109,7 +109,7 @@ export default function Register() {
               <input name="email" type="email" value={form.email} onChange={onChange} placeholder="you@example.com" required />
             </label>
             <label className="field">
-              <span>Mat khau</span>
+              <span>Mật khẩu</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
                 <input
                   style={{ flex: 1 }}
@@ -121,15 +121,15 @@ export default function Register() {
                   required
                 />
                 <button type="button" className="btn" onClick={() => setShowPass((s) => !s)}>
-                  {showPass ? "An" : "Hien"}
+                  {showPass ? "Ẩn" : "Hiện"}
                 </button>
               </div>
               {form.password && (form.password.length < 10 || !passwordSpecial.test(form.password)) && (
-                <div className="field-error">Mat khau phai dai toi thieu 10 ky tu va chua ky tu dac biet.</div>
+                <div className="field-error">Mật khẩu phải dài tối thiểu 10 ký tự và chứa ký tự đặc biệt.</div>
               )}
             </label>
             <label className="field">
-              <span>Xac nhan mat khau</span>
+              <span>Xác nhận mật khẩu</span>
               <input
                 name="confirm_password"
                 type={showPass ? "text" : "password"}
@@ -139,12 +139,12 @@ export default function Register() {
                 required
               />
               {form.confirm_password && form.confirm_password !== form.password && (
-                <div className="field-error">Mat khau khong khop.</div>
+                <div className="field-error">Mật khẩu không khớp.</div>
               )}
             </label>
 
             <label className="field">
-              <span>Ngay sinh</span>
+              <span>Ngày sinh</span>
               <input
                 name="date_of_birth"
                 type="date"
@@ -161,7 +161,7 @@ export default function Register() {
 
             <div className="form-actions">
               <button type="submit" disabled={loading} className="btn primary large">
-                {loading ? "Dang dang ky..." : "Dang ky"}
+                {loading ? "Đang đăng ký..." : "Đăng ký"}
               </button>
             </div>
           </form>

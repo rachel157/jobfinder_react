@@ -248,6 +248,80 @@
   margin: var(--spacing-xl) 0;
 }
 
+/* Profile entity modal */
+.entity-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.entity-modal-title {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-gray-800);
+}
+
+.entity-modal-description {
+  margin: 0;
+}
+
+.entity-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.entity-form-scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-right: -4px;
+}
+
+.entity-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.entity-field span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-700);
+}
+
+.entity-field input,
+.entity-field select,
+.entity-field textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--color-gray-200);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.entity-field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.entity-field.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-form .modal-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-gray-200);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 8px;

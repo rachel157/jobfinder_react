@@ -289,10 +289,6 @@ export default function AdminJobDetail() {
                 <label>Ngày hết hạn</label>
                 <div>{formatDate(job.expires_at)}</div>
               </div>
-              <div className="admin-info-item">
-                <label>Ngày tạo</label>
-                <div>{formatDate(job.created_at)}</div>
-              </div>
             </div>
           </div>
 

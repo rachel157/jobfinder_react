@@ -2,6 +2,7 @@
 import Modal from '../components/Modal.jsx'
 import { ProfileClient } from '../services/profileClient'
 import { UploadClient } from '../services/uploadClient'
+import { LocationService } from '../lib/api.js'
 import { calculateProfileCompletion } from '../utils/profileCompletion'
 
 const jobTypeOptions = [
@@ -50,6 +51,7 @@ const blankForm = () => ({
   personal_website: '',
   linkedin_url: '',
   github_url: '',
+  location_id: '',
   location_text: '',
   bio: '',
   years_of_experience: '',
@@ -72,6 +74,7 @@ const toFormState = (profile) => {
     personal_website: profile.personal_website || '',
     linkedin_url: profile.linkedin_url || '',
     github_url: profile.github_url || '',
+    location_id: profile.location_id || '',
     location_text: profile.location_text || '',
     bio: profile.bio || '',
     years_of_experience: typeof profile.years_of_experience === 'number' ? String(profile.years_of_experience) : '',
@@ -105,7 +108,7 @@ const formatDateRange = (start, end, isCurrent) => {
   return `${startText} – ${endText}`
 }
 
-const buildPayload = (form) => {
+const buildPayload = (form, selectedDistrict, selectedProvince) => {
   const payload = {}
   Object.entries(form).forEach(([key, value]) => {
     if(key === 'desired_job_type'){
@@ -122,12 +125,35 @@ const buildPayload = (form) => {
       if(typeof value === 'boolean') payload[key] = value
       return
     }
+    // Handle location_id separately
+    if(key === 'location_id'){
+      return
+    }
+    // Skip location_text if we have location_id
+    if(key === 'location_text'){
+      return
+    }
     if(value === undefined || value === null) return
     if(typeof value === 'string'){
       const trimmed = value.trim()
       if(trimmed) payload[key] = trimmed
     }
   })
+  
+  // Handle location - prefer location_id if available
+  if(selectedDistrict?.id) {
+    payload.location_id = selectedDistrict.id
+    // Auto-generate location_text from selection
+    const locationParts = []
+    if(selectedDistrict?.name) locationParts.push(selectedDistrict.name)
+    if(selectedProvince?.name) locationParts.push(selectedProvince.name)
+    if(locationParts.length) {
+      payload.location_text = locationParts.join(', ')
+    }
+  } else if(form.location_text?.trim()) {
+    payload.location_text = form.location_text.trim()
+  }
+  
   return payload
 }
 
@@ -152,10 +178,230 @@ export default function Profile(){
   const [avatarUploading, setAvatarUploading] = useState(false)
   const avatarInputRef = useRef(null)
 
+  // Location cascading dropdown states - Create form
+  const [provinces, setProvinces] = useState([])
+  const [initialProvinces, setInitialProvinces] = useState([])
+  const [selectedProvinceCreate, setSelectedProvinceCreate] = useState(null)
+  const [provinceSearchCreate, setProvinceSearchCreate] = useState('')
+  const [showProvinceDropdownCreate, setShowProvinceDropdownCreate] = useState(false)
+  
+  const [availableDistrictsCreate, setAvailableDistrictsCreate] = useState([])
+  const [initialDistrictsCreate, setInitialDistrictsCreate] = useState([])
+  const [selectedDistrictCreate, setSelectedDistrictCreate] = useState(null)
+  const [districtSearchCreate, setDistrictSearchCreate] = useState('')
+  const [showDistrictDropdownCreate, setShowDistrictDropdownCreate] = useState(false)
+  const [loadingDistrictsCreate, setLoadingDistrictsCreate] = useState(false)
+  
+  // Location cascading dropdown states - Update form
+  const [selectedProvinceUpdate, setSelectedProvinceUpdate] = useState(null)
+  const [provinceSearchUpdate, setProvinceSearchUpdate] = useState('')
+  const [showProvinceDropdownUpdate, setShowProvinceDropdownUpdate] = useState(false)
+  
+  const [availableDistrictsUpdate, setAvailableDistrictsUpdate] = useState([])
+  const [initialDistrictsUpdate, setInitialDistrictsUpdate] = useState([])
+  const [selectedDistrictUpdate, setSelectedDistrictUpdate] = useState(null)
+  const [districtSearchUpdate, setDistrictSearchUpdate] = useState('')
+  const [showDistrictDropdownUpdate, setShowDistrictDropdownUpdate] = useState(false)
+  const [loadingDistrictsUpdate, setLoadingDistrictsUpdate] = useState(false)
+  const [isLoadingLocationHierarchy, setIsLoadingLocationHierarchy] = useState(false)
+
   useEffect(() => {
     loadProfile()
     loadUserMeta()
   }, [])
+
+  // Load provinces on mount
+  useEffect(() => {
+    const fetchProvinces = async () => {
+      try {
+        const response = await LocationService.getProvinces()
+        const data = response.data || []
+        setProvinces(data)
+        setInitialProvinces(data)
+      } catch (err) {
+        console.error('Failed to fetch provinces:', err)
+      }
+    }
+    fetchProvinces()
+  }, [])
+
+  // Filter provinces based on search - Create form
+  useEffect(() => {
+    if (!provinceSearchCreate.trim()) {
+      setProvinces(initialProvinces)
+      return
+    }
+    const filtered = initialProvinces.filter(province =>
+      province.name.toLowerCase().includes(provinceSearchCreate.toLowerCase())
+    )
+    setProvinces(filtered)
+  }, [provinceSearchCreate, initialProvinces])
+
+  // Filter provinces based on search - Update form
+  const filteredProvincesUpdate = useMemo(() => {
+    if (!provinceSearchUpdate.trim()) {
+      return initialProvinces
+    }
+    return initialProvinces.filter(province =>
+      province.name.toLowerCase().includes(provinceSearchUpdate.toLowerCase())
+    )
+  }, [provinceSearchUpdate, initialProvinces])
+
+  // Fetch districts when province is selected - Create form
+  useEffect(() => {
+    if (!selectedProvinceCreate) {
+      setAvailableDistrictsCreate([])
+      setInitialDistrictsCreate([])
+      setDistrictSearchCreate('')
+      setSelectedDistrictCreate(null)
+      return
+    }
+
+    const fetchDistricts = async () => {
+      setLoadingDistrictsCreate(true)
+      try {
+        const response = await LocationService.getDistricts(selectedProvinceCreate.id)
+        const data = response.data || []
+        setAvailableDistrictsCreate(data)
+        setInitialDistrictsCreate(data)
+        setSelectedDistrictCreate(null)
+        setDistrictSearchCreate('')
+        setCreateForm(prev => ({ ...prev, location_id: '' }))
+      } catch (err) {
+        console.error('Failed to fetch districts:', err)
+        setAvailableDistrictsCreate([])
+        setInitialDistrictsCreate([])
+      } finally {
+        setLoadingDistrictsCreate(false)
+      }
+    }
+
+    fetchDistricts()
+  }, [selectedProvinceCreate])
+
+  // Fetch districts when province is selected - Update form
+  useEffect(() => {
+    if (!selectedProvinceUpdate) {
+      setAvailableDistrictsUpdate([])
+      setInitialDistrictsUpdate([])
+      setDistrictSearchUpdate('')
+      if (!isLoadingLocationHierarchy) {
+        setSelectedDistrictUpdate(null)
+      }
+      return
+    }
+
+    const fetchDistricts = async () => {
+      setLoadingDistrictsUpdate(true)
+      try {
+        const response = await LocationService.getDistricts(selectedProvinceUpdate.id)
+        const data = response.data || []
+        setAvailableDistrictsUpdate(data)
+        setInitialDistrictsUpdate(data)
+        if (!isLoadingLocationHierarchy) {
+          setSelectedDistrictUpdate(null)
+          setDistrictSearchUpdate('')
+          setUpdateForm(prev => ({ ...prev, location_id: '' }))
+        }
+      } catch (err) {
+        console.error('Failed to fetch districts:', err)
+        setAvailableDistrictsUpdate([])
+        setInitialDistrictsUpdate([])
+      } finally {
+        setLoadingDistrictsUpdate(false)
+      }
+    }
+
+    fetchDistricts()
+  }, [selectedProvinceUpdate, isLoadingLocationHierarchy])
+
+  // Filter districts based on search - Create form
+  useEffect(() => {
+    if (!districtSearchCreate.trim()) {
+      setAvailableDistrictsCreate(initialDistrictsCreate)
+      return
+    }
+    const filtered = initialDistrictsCreate.filter(district =>
+      district.name.toLowerCase().includes(districtSearchCreate.toLowerCase())
+    )
+    setAvailableDistrictsCreate(filtered)
+  }, [districtSearchCreate, initialDistrictsCreate])
+
+  // Filter districts based on search - Update form  
+  const filteredDistrictsUpdate = useMemo(() => {
+    if (!districtSearchUpdate.trim()) {
+      return initialDistrictsUpdate
+    }
+    return initialDistrictsUpdate.filter(district =>
+      district.name.toLowerCase().includes(districtSearchUpdate.toLowerCase())
+    )
+  }, [districtSearchUpdate, initialDistrictsUpdate])
+
+  // Load location hierarchy when profile has location_id - Update form
+  useEffect(() => {
+    const loadLocationHierarchy = async () => {
+      if (!profile?.location_id || profile.location_id.trim() === '') {
+        return
+      }
+
+      // Skip if already loaded
+      if (selectedProvinceUpdate && selectedDistrictUpdate && selectedDistrictUpdate.id === profile.location_id) {
+        return
+      }
+
+      setIsLoadingLocationHierarchy(true)
+      try {
+        const locationResponse = await LocationService.getById(profile.location_id)
+        const location = locationResponse.data
+        
+        if (!location) {
+          setIsLoadingLocationHierarchy(false)
+          return
+        }
+
+        // If location has parent_id, it's a district
+        if (location.parent_id) {
+          const provinceResponse = await LocationService.getById(location.parent_id)
+          const province = provinceResponse.data
+          
+          if (province) {
+            setSelectedProvinceUpdate(province)
+            setProvinceSearchUpdate(province.name)
+            
+            // Wait for districts to load then set selected district
+            setTimeout(async () => {
+              try {
+                const districtsResponse = await LocationService.getDistricts(province.id)
+                const districts = districtsResponse.data || []
+                setAvailableDistrictsUpdate(districts)
+                setInitialDistrictsUpdate(districts)
+                
+                const district = districts.find(d => d.id === profile.location_id)
+                if (district) {
+                  setSelectedDistrictUpdate(district)
+                  setDistrictSearchUpdate(district.name)
+                }
+              } finally {
+                setIsLoadingLocationHierarchy(false)
+              }
+            }, 300)
+          } else {
+            setIsLoadingLocationHierarchy(false)
+          }
+        } else {
+          // If no parent_id, it's a province itself
+          setSelectedProvinceUpdate(location)
+          setProvinceSearchUpdate(location.name)
+          setIsLoadingLocationHierarchy(false)
+        }
+      } catch (err) {
+        console.error('Failed to load location hierarchy:', err)
+        setIsLoadingLocationHierarchy(false)
+      }
+    }
+
+    loadLocationHierarchy()
+  }, [profile?.location_id])
 
   const loadUserMeta = async () => {
     try {
@@ -230,10 +476,70 @@ export default function Profile(){
   const handleUpdateLooking = () =>
     setUpdateForm((prev) => ({ ...prev, is_looking_for_job: !prev.is_looking_for_job }))
 
+  // Location handlers - Create form
+  const handleProvinceSelectCreate = (province) => {
+    setSelectedProvinceCreate(province)
+    setProvinceSearchCreate(province.name)
+    setShowProvinceDropdownCreate(false)
+  }
+
+  const handleDistrictSelectCreate = (district) => {
+    setSelectedDistrictCreate(district)
+    setDistrictSearchCreate(district.name)
+    setShowDistrictDropdownCreate(false)
+    setCreateForm(prev => ({ ...prev, location_id: district.id }))
+  }
+
+  const handleClearProvinceCreate = () => {
+    setSelectedProvinceCreate(null)
+    setProvinceSearchCreate('')
+    setAvailableDistrictsCreate([])
+    setInitialDistrictsCreate([])
+    setSelectedDistrictCreate(null)
+    setDistrictSearchCreate('')
+    setCreateForm(prev => ({ ...prev, location_id: '' }))
+  }
+
+  const handleClearDistrictCreate = () => {
+    setSelectedDistrictCreate(null)
+    setDistrictSearchCreate('')
+    setCreateForm(prev => ({ ...prev, location_id: '' }))
+  }
+
+  // Location handlers - Update form
+  const handleProvinceSelectUpdate = (province) => {
+    setSelectedProvinceUpdate(province)
+    setProvinceSearchUpdate(province.name)
+    setShowProvinceDropdownUpdate(false)
+  }
+
+  const handleDistrictSelectUpdate = (district) => {
+    setSelectedDistrictUpdate(district)
+    setDistrictSearchUpdate(district.name)
+    setShowDistrictDropdownUpdate(false)
+    setUpdateForm(prev => ({ ...prev, location_id: district.id }))
+  }
+
+  const handleClearProvinceUpdate = () => {
+    setSelectedProvinceUpdate(null)
+    setProvinceSearchUpdate('')
+    setAvailableDistrictsUpdate([])
+    setInitialDistrictsUpdate([])
+    setSelectedDistrictUpdate(null)
+    setDistrictSearchUpdate('')
+    setUpdateForm(prev => ({ ...prev, location_id: '' }))
+  }
+
+  const handleClearDistrictUpdate = () => {
+    setSelectedDistrictUpdate(null)
+    setDistrictSearchUpdate('')
+    setUpdateForm(prev => ({ ...prev, location_id: '' }))
+  }
+
   const onCreate = async (e) => {
     e.preventDefault()
     setCreateStatus({ loading: true, message: '', error: '' })
-    const payload = buildPayload(createForm)
+    const payload = buildPayload(createForm, selectedDistrictCreate, selectedProvinceCreate)
     if(!payload.full_name){
       setCreateStatus({ loading: false, message: '', error: 'Họ tên là bắt buộc.' })
       return
@@ -253,7 +559,7 @@ export default function Profile(){
   const onUpdate = async (e) => {
     e.preventDefault()
     setUpdateStatus({ loading: true, message: '', error: '' })
-    const payload = buildPayload(updateForm)
+    const payload = buildPayload(updateForm, selectedDistrictUpdate, selectedProvinceUpdate)
     if(Object.keys(payload).length === 0){
       setUpdateStatus({ loading: false, message: '', error: 'Hãy thay đổi ít nhất một trường trước khi cập nhật.' })
       return
@@ -641,7 +947,7 @@ export default function Profile(){
     </div>
   )
 
-  const renderFormSections = (form, onChange, toggleJobType, toggleLooking, requireName) => {
+  const renderFormSections = (form, onChange, toggleJobType, toggleLooking, requireName, locationContent) => {
     const sections = [
       {
         key: 'basic',
@@ -706,14 +1012,7 @@ export default function Profile(){
         key: 'location',
         title: 'Khu vực',
         description: 'Nơi bạn đang sinh sống hoặc mong muốn làm việc.',
-        content: (
-          <div className="form-grid">
-            <label className="field">
-              <span>Mô tả địa điểm</span>
-              <input name="location_text" value={form.location_text} onChange={onChange} placeholder="Quận 1, TP.HCM" />
-            </label>
-          </div>
-        ),
+        content: locationContent,
       },
       {
         key: 'experience',
@@ -854,7 +1153,111 @@ export default function Profile(){
             <div className="profile-form-wrapper">
               {activeTab === 'create' && (
                 <form onSubmit={onCreate} className="profile-form">
-                  {renderFormSections(createForm, handleCreateChange, toggleCreateJobType, handleCreateLooking, true)}
+                  {renderFormSections(createForm, handleCreateChange, toggleCreateJobType, handleCreateLooking, true, (
+                    <div className="form-grid location-cascading">
+                      <label className="field">
+                        <span>Tỉnh/Thành phố</span>
+                        {selectedProvinceCreate ? (
+                          <div className="selected-location-item">
+                            <span>{selectedProvinceCreate.name}</span>
+                            <button type="button" onClick={handleClearProvinceCreate} className="clear-btn">×</button>
+                          </div>
+                        ) : (
+                          <div className="autocomplete-wrapper">
+                            <input 
+                              type="text"
+                              value={provinceSearchCreate}
+                              onChange={(e) => {
+                                setProvinceSearchCreate(e.target.value)
+                                setShowProvinceDropdownCreate(true)
+                              }}
+                              onFocus={() => {
+                                setShowProvinceDropdownCreate(true)
+                                if (!provinceSearchCreate.trim() && initialProvinces.length > 0) {
+                                  setProvinces(initialProvinces)
+                                }
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => setShowProvinceDropdownCreate(false), 150)
+                              }}
+                              placeholder="Tìm kiếm tỉnh/thành phố..."
+                            />
+                            {showProvinceDropdownCreate && provinces.length > 0 && (
+                              <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                                {provinces.map(province => (
+                                  <div 
+                                    key={province.id}
+                                    className="autocomplete-item"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      handleProvinceSelectCreate(province)
+                                    }}
+                                  >
+                                    {province.name}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </label>
+                      <label className="field">
+                        <span>Quận/Huyện</span>
+                        {selectedDistrictCreate ? (
+                          <div className="selected-location-item">
+                            <span>{selectedDistrictCreate.name}</span>
+                            <button type="button" onClick={handleClearDistrictCreate} className="clear-btn">×</button>
+                          </div>
+                        ) : (
+                          <div className="autocomplete-wrapper">
+                            <input 
+                              type="text"
+                              value={districtSearchCreate}
+                              onChange={(e) => {
+                                setDistrictSearchCreate(e.target.value)
+                                setShowDistrictDropdownCreate(true)
+                              }}
+                              onFocus={() => {
+                                if (selectedProvinceCreate) {
+                                  setShowDistrictDropdownCreate(true)
+                                  if (!districtSearchCreate.trim() && initialDistrictsCreate.length > 0) {
+                                    setAvailableDistrictsCreate(initialDistrictsCreate)
+                                  }
+                                }
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => setShowDistrictDropdownCreate(false), 150)
+                              }}
+                              placeholder={
+                                loadingDistrictsCreate 
+                                  ? 'Đang tải...' 
+                                  : !selectedProvinceCreate 
+                                    ? 'Chọn tỉnh/thành phố trước' 
+                                    : 'Tìm kiếm quận/huyện...'
+                              }
+                              disabled={!selectedProvinceCreate || loadingDistrictsCreate}
+                            />
+                            {showDistrictDropdownCreate && selectedProvinceCreate && !loadingDistrictsCreate && availableDistrictsCreate.length > 0 && (
+                              <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                                {availableDistrictsCreate.map(district => (
+                                  <div 
+                                    key={district.id}
+                                    className="autocomplete-item"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      handleDistrictSelectCreate(district)
+                                    }}
+                                  >
+                                    {district.name}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  ))}
                   <StatusBanner state={createStatus} />
                   <div className="profile-actions">
                     <button type="submit" className="btn primary large" disabled={createStatus.loading}>
@@ -871,7 +1274,105 @@ export default function Profile(){
                 <form onSubmit={onUpdate} className="profile-form">
                   {profile ? (
                     <>
-                      {renderFormSections(updateForm, handleUpdateChange, toggleUpdateJobType, handleUpdateLooking, false)}
+                      {renderFormSections(updateForm, handleUpdateChange, toggleUpdateJobType, handleUpdateLooking, false, (
+                        <div className="form-grid location-cascading">
+                          <label className="field">
+                            <span>Tỉnh/Thành phố</span>
+                            {selectedProvinceUpdate ? (
+                              <div className="selected-location-item">
+                                <span>{selectedProvinceUpdate.name}</span>
+                                <button type="button" onClick={handleClearProvinceUpdate} className="clear-btn">×</button>
+                              </div>
+                            ) : (
+                              <div className="autocomplete-wrapper">
+                                <input 
+                                  type="text"
+                                  value={provinceSearchUpdate}
+                                  onChange={(e) => {
+                                    setProvinceSearchUpdate(e.target.value)
+                                    setShowProvinceDropdownUpdate(true)
+                                  }}
+                                  onFocus={() => {
+                                    setShowProvinceDropdownUpdate(true)
+                                  }}
+                                  onBlur={() => {
+                                    setTimeout(() => setShowProvinceDropdownUpdate(false), 150)
+                                  }}
+                                  placeholder="Tìm kiếm tỉnh/thành phố..."
+                                />
+                                {showProvinceDropdownUpdate && filteredProvincesUpdate.length > 0 && (
+                                  <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                                    {filteredProvincesUpdate.map(province => (
+                                      <div 
+                                        key={province.id}
+                                        className="autocomplete-item"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          handleProvinceSelectUpdate(province)
+                                        }}
+                                      >
+                                        {province.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </label>
+                          <label className="field">
+                            <span>Quận/Huyện</span>
+                            {selectedDistrictUpdate ? (
+                              <div className="selected-location-item">
+                                <span>{selectedDistrictUpdate.name}</span>
+                                <button type="button" onClick={handleClearDistrictUpdate} className="clear-btn">×</button>
+                              </div>
+                            ) : (
+                              <div className="autocomplete-wrapper">
+                                <input 
+                                  type="text"
+                                  value={districtSearchUpdate}
+                                  onChange={(e) => {
+                                    setDistrictSearchUpdate(e.target.value)
+                                    setShowDistrictDropdownUpdate(true)
+                                  }}
+                                  onFocus={() => {
+                                    if (selectedProvinceUpdate) {
+                                      setShowDistrictDropdownUpdate(true)
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    setTimeout(() => setShowDistrictDropdownUpdate(false), 150)
+                                  }}
+                                  placeholder={
+                                    loadingDistrictsUpdate 
+                                      ? 'Đang tải...' 
+                                      : !selectedProvinceUpdate 
+                                        ? 'Chọn tỉnh/thành phố trước' 
+                                        : 'Tìm kiếm quận/huyện...'
+                                  }
+                                  disabled={!selectedProvinceUpdate || loadingDistrictsUpdate}
+                                />
+                                {showDistrictDropdownUpdate && selectedProvinceUpdate && !loadingDistrictsUpdate && filteredDistrictsUpdate.length > 0 && (
+                                  <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                                    {filteredDistrictsUpdate.map(district => (
+                                      <div 
+                                        key={district.id}
+                                        className="autocomplete-item"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          handleDistrictSelectUpdate(district)
+                                        }}
+                                      >
+                                        {district.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                      ))}
                       <StatusBanner state={updateStatus} />
                       <div className="profile-actions">
                         <button type="submit" className="btn primary large" disabled={updateStatus.loading}>

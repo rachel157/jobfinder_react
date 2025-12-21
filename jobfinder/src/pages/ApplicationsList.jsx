@@ -13,7 +13,8 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Đang chờ' },
   { value: 'reviewed', label: 'Đã xem' },
   { value: 'accepted', label: 'Chấp nhận' },
-  { value: 'rejected', label: 'Từ chối' }
+  { value: 'rejected', label: 'Từ chối' },
+  { value: 'withdrawn', label: 'Đã rút' }
 ]
 
 const STATUS_LABELS = {
@@ -207,7 +208,7 @@ export default function ApplicationsList() {
 
   const statsData = stats || {
     total: 0,
-    by_status: { pending: 0, reviewed: 0, accepted: 0, rejected: 0 }
+    by_status: { pending: 0, reviewed: 0, accepted: 0, rejected: 0, withdrawn: 0 }
   }
 
   return (
@@ -255,6 +256,10 @@ export default function ApplicationsList() {
             <div className="stat-item stat-rejected">
               <div className="stat-value">{statsData.by_status?.rejected || 0}</div>
               <div className="stat-label">Từ chối</div>
+            </div>
+            <div className="stat-item stat-withdrawn">
+              <div className="stat-value">{statsData.by_status?.withdrawn || 0}</div>
+              <div className="stat-label">Đã rút</div>
             </div>
           </div>
         </Card>

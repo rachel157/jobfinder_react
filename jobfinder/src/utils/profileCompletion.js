@@ -1,7 +1,7 @@
 /**
- * Tính phần trăm hoàn thành profile dựa trên các trường cơ bản
+ * Tính phần trăm hoàn thành profile dựa trên 8 trường cơ bản
  * @param {Object} profileData - Profile data (có thể là raw profile hoặc formatted data từ API)
- * @returns {Object} - { percentage: number, details: Object }
+ * @returns {Object} - { percentage: number, details: Object, missingItems: Array, isComplete: boolean }
  */
 export function calculateProfileCompletion(profileData) {
   if (!profileData) {
@@ -11,17 +11,21 @@ export function calculateProfileCompletion(profileData) {
         fullName: false,
         contact: false,
         bio: false,
-        skills: false,
-        experiences: false,
-        educations: false,
+        headline: false,
+        location: false,
+        desiredJobTitle: false,
+        yearsOfExperience: false,
+        avatar: false,
       },
       missingItems: [
         'Họ và tên',
         'Email hoặc số điện thoại',
         'Giới thiệu bản thân',
-        'Kỹ năng',
-        'Kinh nghiệm làm việc',
-        'Học vấn',
+        'Tiêu đề nghề nghiệp',
+        'Địa điểm',
+        'Vị trí mong muốn',
+        'Số năm kinh nghiệm',
+        'Ảnh đại diện',
       ],
       isComplete: false,
     }
@@ -36,9 +40,11 @@ export function calculateProfileCompletion(profileData) {
       email: sections.personal_info?.data?.email,
       phone_number: sections.personal_info?.data?.phone,
       bio: sections.personal_info?.data?.bio,
-      skills: sections.skills?.items || [],
-      experiences: sections.experiences?.items || [],
-      educations: sections.educations?.items || [],
+      headline: sections.personal_info?.data?.headline,
+      location_id: sections.personal_info?.data?.location_id,
+      desired_job_title: sections.personal_info?.data?.desired_job_title,
+      years_of_experience: sections.personal_info?.data?.years_of_experience,
+      avatar_url: sections.personal_info?.data?.avatar_url,
       users: profileData.users || (sections.personal_info?.data?.email ? { email: sections.personal_info.data.email } : null),
     }
   }
@@ -47,7 +53,6 @@ export function calculateProfileCompletion(profileData) {
   const details = {}
   const missingItems = []
 
-  // Personal Info (40%)
   // Full name (15%)
   if (profile.full_name?.trim()) {
     score += 15
@@ -77,34 +82,53 @@ export function calculateProfileCompletion(profileData) {
     missingItems.push('Giới thiệu bản thân')
   }
 
-  // Skills (20%)
-  const skills = profile.skills || []
-  if (Array.isArray(skills) && skills.length > 0) {
-    score += 20
-    details.skills = true
+  // Headline (15%)
+  if (profile.headline?.trim()) {
+    score += 15
+    details.headline = true
   } else {
-    details.skills = false
-    missingItems.push('Kỹ năng')
+    details.headline = false
+    missingItems.push('Tiêu đề nghề nghiệp')
   }
 
-  // Experiences (20%)
-  const experiences = profile.experiences || []
-  if (Array.isArray(experiences) && experiences.length > 0) {
-    score += 20
-    details.experiences = true
+  // Location (10%)
+  if (profile.location_id?.trim()) {
+    score += 10
+    details.location = true
   } else {
-    details.experiences = false
-    missingItems.push('Kinh nghiệm làm việc')
+    details.location = false
+    missingItems.push('Địa điểm')
   }
 
-  // Educations (20%)
-  const educations = profile.educations || []
-  if (Array.isArray(educations) && educations.length > 0) {
-    score += 20
-    details.educations = true
+  // Desired Job Title (10%)
+  if (profile.desired_job_title?.trim()) {
+    score += 10
+    details.desiredJobTitle = true
   } else {
-    details.educations = false
-    missingItems.push('Học vấn')
+    details.desiredJobTitle = false
+    missingItems.push('Vị trí mong muốn')
+  }
+
+  // Years of Experience (10%)
+  // Chấp nhận giá trị 0 (người mới ra trường) là hợp lệ
+  const yearsExp = profile.years_of_experience
+  if (yearsExp !== null && yearsExp !== undefined && yearsExp !== '' && !isNaN(Number(yearsExp))) {
+    score += 10
+    details.yearsOfExperience = true
+  } else {
+    details.yearsOfExperience = false
+    missingItems.push('Số năm kinh nghiệm')
+  }
+
+  // Avatar (15%)
+  // Kiểm tra avatar_url từ profile hoặc từ users.profile.avatar_url
+  const avatarUrl = profile.avatar_url || profile.users?.profile?.avatar_url
+  if (avatarUrl?.trim()) {
+    score += 15
+    details.avatar = true
+  } else {
+    details.avatar = false
+    missingItems.push('Ảnh đại diện')
   }
 
   return {
@@ -114,4 +138,3 @@ export function calculateProfileCompletion(profileData) {
     isComplete: score === 100,
   }
 }
-

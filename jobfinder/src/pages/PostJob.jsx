@@ -369,32 +369,12 @@ export default function PostJob() {
     return () => clearTimeout(timer)
   }, [tagSearch, initialTags])
 
-  // Load provinces on mount (fetch many and filter client-side to avoid pagination gaps)
+  // Load provinces on mount
   useEffect(() => {
     const fetchProvinces = async () => {
       try {
-        // Fetch with a large limit to avoid missing provinces due to pagination
-        let response = await LocationService.list({ limit: 1000 })
-        let data = response.data || []
-
-        // Fallback: if still empty, try typed queries (some datasets use different type naming)
-        if (data.length === 0) {
-          response = await LocationService.list({ type: 'tinh', limit: 1000 })
-          data = response.data || []
-        }
-        if (data.length === 0) {
-          response = await LocationService.list({ type: 'province', limit: 1000 })
-          data = response.data || []
-        }
-
-        // Filter client-side by multiple possible province type aliases
-        const provinceTypeAliases = ['tinh', 'province', 'thanh-pho', 'city', 'tp', 'thanhpho']
-        data = data.filter(loc => {
-          if (!loc.type) return false
-          const t = String(loc.type).toLowerCase()
-          return provinceTypeAliases.some(alias => t.includes(alias))
-        })
-
+        const response = await LocationService.getProvinces()
+        const data = response.data || []
         setProvinces(data)
         setInitialProvinces(data) // Store for search filtering
       } catch (err) {
@@ -450,7 +430,7 @@ export default function PostJob() {
     const fetchDistricts = async () => {
       setLoadingDistricts(true)
       try {
-        const response = await LocationService.getChildren(selectedProvince.id)
+        const response = await LocationService.getDistricts(selectedProvince.id)
         const data = response.data || []
         setAvailableDistricts(data)
         setInitialDistricts(data) // Store for search filtering
@@ -510,7 +490,7 @@ export default function PostJob() {
             // Wait for districts to load, then set the selected district
             setTimeout(async () => {
               try {
-                const districtsResponse = await LocationService.getChildren(province.id)
+                const districtsResponse = await LocationService.getDistricts(province.id)
                 const districts = districtsResponse.data || []
                 setAvailableDistricts(districts)
                 setInitialDistricts(districts)

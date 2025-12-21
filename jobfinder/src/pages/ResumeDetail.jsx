@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ResumeApi } from '../services/resumeApi'
 import TemplateGallery from '../components/resumes/TemplateGallery'
@@ -20,6 +20,8 @@ export default function ResumeDetail() {
   const [activeTab, setActiveTab] = useState('content')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [saveIndicator, setSaveIndicator] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const previewRef = useRef(null)
 
   // Form state
   const [title, setTitle] = useState('')
@@ -205,39 +207,276 @@ export default function ResumeDetail() {
     }
   }
 
-  const handleExport = async (format = 'pdf') => {
-    try {
-      const result = await ResumeApi.exportResume(id, {
-        template: selectedTheme,
-        format: format,
+  // Helper function để extract HTML đầy đủ từ DOM element
+  const getCompleteHTML = async (element, title) => {
+    if (!element) {
+      console.error('❌ getCompleteHTML: element is null')
+      return null
+    }
+    
+    console.log('✅ getCompleteHTML: element found', {
+      className: element.className,
+      tagName: element.tagName,
+      innerHTMLLength: element.innerHTML?.length || 0
+    })
+    
+    // Clone element để không ảnh hưởng DOM hiện tại
+    const clone = element.cloneNode(true)
+    
+    // 1. Convert images to base64 (bao gồm cả absolute URLs từ S3/CDN)
+    const images = clone.querySelectorAll('img')
+    await Promise.all(
+      Array.from(images).map(async (img) => {
+        // Convert tất cả images (bao gồm cả http/https URLs) sang base64
+        if (img.src && !img.src.startsWith('data:')) {
+          try {
+            // Fetch image với credentials nếu cần (cho S3 với CORS)
+            const response = await fetch(img.src, {
+              mode: 'cors',
+              credentials: 'include'
+            })
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch image: ${response.status}`)
+            }
+            
+            const blob = await response.blob()
+            const base64 = await new Promise((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+            img.src = base64
+          } catch (err) {
+            console.warn('Failed to convert image to base64:', err, img.src)
+            // Nếu không convert được, giữ nguyên URL (backend có thể xử lý)
+            // Hoặc có thể dùng placeholder nếu cần
+          }
+        }
       })
+    )
+    
+    // 2. Get CSS từ style tags trong clone
+    let allCSS = ''
+    const styleTags = clone.querySelectorAll('style')
+    styleTags.forEach((style) => {
+      allCSS += style.textContent + '\n'
+    })
+    
+    // 3. Remove style tags khỏi clone (đã extract CSS rồi)
+    styleTags.forEach((tag) => tag.remove())
+    
+    // 4. Build complete HTML document với đầy đủ CSS và fonts
+    return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title || 'CV'}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    ${allCSS}
+  </style>
+</head>
+<body>
+  ${clone.innerHTML}
+</body>
+</html>`
+  }
+
+  const handleExport = async (format = 'pdf') => {
+    if (exporting) return // Prevent multiple clicks
+    
+    setExporting(true)
+    try {
+      let htmlContent = null
+      
+      // Đảm bảo preview được mở để có thể lấy HTML
+      if (!previewOpen) {
+        console.log('📋 Mở preview để extract HTML...')
+        setPreviewOpen(true)
+        // Đợi DOM render xong (tăng thời gian đợi)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
+      // Đợi thêm một chút để đảm bảo template đã render hoàn toàn
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Lấy HTML từ preview
+      if (previewRef.current) {
+        console.log('🔍 Đang tìm template element trong preview...')
+        
+        // Tìm element chứa template - thử nhiều selector
+        let templateElement = previewRef.current.querySelector('.cv-template')
+        
+        // Nếu không tìm thấy, thử tìm trong các template variants
+        if (!templateElement) {
+          console.log('⚠️ Không tìm thấy .cv-template, thử các variant...')
+          templateElement = previewRef.current.querySelector('.cv-template--professional') ||
+                           previewRef.current.querySelector('.cv-template--timeline') ||
+                           previewRef.current.querySelector('.cv-template--compact')
+        }
+        
+        // Nếu vẫn không tìm thấy, thử tìm trong preview content
+        if (!templateElement) {
+          console.log('⚠️ Không tìm thấy template variants, thử tìm trong preview content...')
+          const previewContent = previewRef.current.querySelector('.cv-preview__content')
+          if (previewContent) {
+            templateElement = previewContent.querySelector('.cv-template') ||
+                             previewContent.querySelector('.cv-template--professional') ||
+                             previewContent.querySelector('.cv-template--timeline') ||
+                             previewContent.querySelector('.cv-template--compact')
+          }
+        }
+        
+        // Nếu vẫn không tìm thấy, lấy toàn bộ preview content (fallback)
+        if (!templateElement) {
+          console.warn('⚠️ Không tìm thấy .cv-template, sử dụng toàn bộ preview content')
+          templateElement = previewRef.current.querySelector('.cv-preview__content') ||
+                           previewRef.current.querySelector('.cv-preview') ||
+                           previewRef.current
+        }
+        
+        if (templateElement) {
+          console.log('✅ Tìm thấy template element:', {
+            className: templateElement.className,
+            tagName: templateElement.tagName
+          })
+          htmlContent = await getCompleteHTML(templateElement, title)
+          
+          if (htmlContent) {
+            console.log('✅ HTML extracted successfully, length:', htmlContent.length)
+          } else {
+            console.error('❌ HTML extraction failed')
+          }
+        } else {
+          console.error('❌ Không tìm thấy template element trong preview')
+        }
+      } else {
+        console.error('❌ previewRef.current is null')
+      }
+      
+      // Nếu không lấy được HTML, cảnh báo nhưng vẫn tiếp tục
+      if (!htmlContent) {
+        console.warn('⚠️ Không lấy được HTML từ preview, backend sẽ generate từ template')
+        alert('Không thể lấy HTML từ preview. PDF sẽ được tạo từ template backend.')
+      }
+      
+      // Map theme từ frontend sang backend format
+      const themeMap = {
+        'professional': 'professional',
+        'timeline': 'modern',
+        'compact': 'minimal',
+        'default': 'modern'
+      }
+      const backendTheme = themeMap[selectedTheme] || 'modern'
+      
+      console.log('📤 Gửi request export với:', {
+        hasHtml: !!htmlContent,
+        htmlLength: htmlContent?.length || 0,
+        template: backendTheme,
+        format
+      })
+      
+      // Gửi request với HTML từ frontend (nếu có) hoặc để backend generate
+      const result = await ResumeApi.exportResume(id, {
+        template: backendTheme,
+        format: format,
+        html: htmlContent // Gửi HTML từ frontend template
+      })
+      
       if (format === 'html') {
-        const blob = new Blob([result.content || result], { type: 'text/html' })
+        const blob = new Blob([result.content || htmlContent || ''], { type: 'text/html' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
         a.download = `${title || 'resume'}.html`
         a.click()
         URL.revokeObjectURL(url)
+        setSaveIndicator('Đã xuất file HTML thành công!')
+        setTimeout(() => setSaveIndicator(''), 3000)
       } else {
-        if (result.url) {
-          window.open(result.url, '_blank')
+        if (result.url || result.data?.url) {
+          const pdfUrl = result.url || result.data?.url
+          
+          try {
+            // Fetch file từ S3 để download
+            const response = await fetch(pdfUrl, {
+              mode: 'cors',
+              credentials: 'omit'
+            })
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const blob = await response.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            
+            // Tạo link download từ blob URL
+            const a = document.createElement('a')
+            a.href = blobUrl
+            a.download = `${title || 'resume'}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            
+            // Cleanup blob URL
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100)
+            
+            setSaveIndicator('Đã xuất file PDF thành công!')
+            setTimeout(() => setSaveIndicator(''), 3000)
+          } catch (err) {
+            console.error('Download error:', err)
+            // Fallback: mở trong tab mới nếu fetch thất bại
+            window.open(pdfUrl, '_blank')
+            setSaveIndicator('Đã mở PDF trong tab mới!')
+            setTimeout(() => setSaveIndicator(''), 3000)
+          }
         } else {
           alert('Đã tạo file PDF. Vui lòng kiểm tra email hoặc tải xuống từ link.')
         }
       }
     } catch (err) {
-      alert(err?.message || 'Không thể export CV.')
+      console.error('Export error:', err)
+      alert(err?.message || 'Không thể export CV. Vui lòng thử lại.')
+      setError(err?.message || 'Không thể export CV.')
+    } finally {
+      setExporting(false)
     }
   }
 
   const handleDownload = async () => {
     try {
-      const result = await ResumeApi.downloadResume(id)
-      if (result.url) {
-        window.open(result.url, '_blank')
-      }
+      // Lấy pre-signed URL từ backend
+      const { url, filename } = await ResumeApi.downloadResumeFile(id)
+      
+      // Tạo link download trực tiếp từ pre-signed URL
+      // Không fetch để tránh CORS error
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename || `${title || 'resume'}.pdf`
+      a.target = '_blank' // Mở trong tab mới nếu download không hoạt động
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     } catch (err) {
+      console.error('Download error:', err)
       alert(err?.message || 'Không thể tải file CV.')
     }
   }
@@ -313,17 +552,24 @@ export default function ResumeDetail() {
             </button>
             {!isFileResume && (
               <button
-                className="btn btn--icon"
+                className={`btn btn--icon ${exporting ? 'btn--loading' : ''}`}
                 onClick={() => handleExport('pdf')}
-                title="Export PDF"
+                disabled={exporting}
+                title={exporting ? 'Đang xuất PDF...' : 'Xuất PDF'}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
+                {exporting ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                    <circle cx="12" cy="12" r="10" strokeDasharray="60" strokeDashoffset="30" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                )}
               </button>
             )}
             {resume?.file_url && (
@@ -640,13 +886,24 @@ export default function ResumeDetail() {
             <h3 style={{ margin: 0 }}>Preview CV</h3>
             <div className="resume-preview-modal__actions">
               {!isFileResume && (
-                <button className="btn btn--icon" onClick={() => handleExport('pdf')}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                  </svg>
+                <button 
+                  className={`btn btn--icon ${exporting ? 'btn--loading' : ''}`}
+                  onClick={() => handleExport('pdf')}
+                  disabled={exporting}
+                  title={exporting ? 'Đang xuất PDF...' : 'Xuất PDF'}
+                >
+                  {exporting ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spinner">
+                      <circle cx="12" cy="12" r="10" strokeDasharray="60" strokeDashoffset="30" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                  )}
                 </button>
               )}
               <button className="btn btn--icon" onClick={() => setPreviewOpen(false)}>
@@ -666,14 +923,31 @@ export default function ResumeDetail() {
                   style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '12px' }}
                 />
               ) : (
-                <CVPreview
-                  profileData={getProfileDataForPreview()}
-                  theme={selectedTheme || resume.content?.layout_settings?.theme || 'professional'}
-                  title={title || resume.title}
-                  onClose={() => setPreviewOpen(false)}
-                  hideHeader={true}
-                  additionalData={getAdditionalDataForPreview()}
-                />
+                (() => {
+                  const profileData = getProfileDataForPreview()
+                  const additionalData = getAdditionalDataForPreview()
+                  const previewTheme = selectedTheme || resume.content?.layout_settings?.theme || 'professional'
+                  
+                  if (!profileData || !profileData.sections) {
+                    return (
+                      <div className="resume-preview-loading">
+                        <p className="muted">Không có dữ liệu để preview</p>
+                      </div>
+                    )
+                  }
+                  
+                  return (
+                    <CVPreview
+                      ref={previewRef}
+                      profileData={profileData}
+                      theme={previewTheme}
+                      title={title || resume.title}
+                      onClose={() => setPreviewOpen(false)}
+                      hideHeader={true}
+                      additionalData={additionalData}
+                    />
+                  )
+                })()
               )
             ) : (
               <div className="resume-preview-loading">

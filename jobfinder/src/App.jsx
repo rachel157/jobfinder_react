@@ -174,7 +174,11 @@ export default function App(){
                     </div>
                   )}
                 </div>
-                <NavLink className="btn primary" to="/post-job" style={{ whiteSpace: 'nowrap' }}>Đăng tin tuyển dụng</NavLink>
+                {employerRoles.includes(role) && (
+                  <NavLink className="btn primary" to="/post-job" style={{ whiteSpace: 'nowrap' }}>
+                    Đăng tin tuyển dụng
+                  </NavLink>
+                )}
               </>
             ) : (
               <>

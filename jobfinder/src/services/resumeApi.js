@@ -34,8 +34,23 @@ export const ResumeApi = {
     return api.post('/api/resumes/upload', formData).then(pickData)
   },
 
-  // Download CV file
+  // Download CV file (returns URL)
   downloadResume: (id) => api.get(`/api/resumes/${id}/download`).then(pickData),
+
+  // Download CV file directly (returns pre-signed URL)
+  downloadResumeFile: async (id) => {
+    const result = await api.get(`/api/resumes/${id}/download-file`).then(pickData)
+    
+    if (!result.url) {
+      throw new Error('Không lấy được download URL')
+    }
+    
+    // Trả về URL trực tiếp, không fetch để tránh CORS
+    return {
+      url: result.url,
+      filename: result.filename || 'resume.pdf'
+    }
+  },
 
   // Export CV to PDF/HTML
   exportResume: (id, payload) => api.post(`/api/resumes/${id}/export`, payload).then(pickData),

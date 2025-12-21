@@ -50,7 +50,11 @@ export default function ResumeCreate() {
                     linkedin_url: profileData.linkedin_url,
                     website: profileData.personal_website,
                     date_of_birth: profileData.date_of_birth,
-                    avatar_url: profileData.avatar_url
+                    // Các trường phục vụ tính completion
+                    location_id: profileData.location_id,
+                    desired_job_title: profileData.desired_job_title,
+                    years_of_experience: profileData.years_of_experience,
+                    avatar_url: profileData.avatar_url,
                   }
                 },
                 skills: {
