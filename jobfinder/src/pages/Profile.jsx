@@ -2,7 +2,7 @@
 import Modal from '../components/Modal.jsx'
 import { ProfileClient } from '../services/profileClient'
 import { UploadClient } from '../services/uploadClient'
-import { LocationService } from '../lib/api.js'
+import { LocationService, SkillService } from '../lib/api.js'
 import { calculateProfileCompletion } from '../utils/profileCompletion'
 
 const jobTypeOptions = [
@@ -191,6 +191,14 @@ export default function Profile(){
   const [districtSearchCreate, setDistrictSearchCreate] = useState('')
   const [showDistrictDropdownCreate, setShowDistrictDropdownCreate] = useState(false)
   const [loadingDistrictsCreate, setLoadingDistrictsCreate] = useState(false)
+  // Skill selection states (for entity modal)
+  const [skillCategories, setSkillCategories] = useState([])
+  const [initialSkillCategories, setInitialSkillCategories] = useState([])
+  const [availableSkills, setAvailableSkills] = useState([])
+  const [initialAvailableSkills, setInitialAvailableSkills] = useState([])
+  const [skillSearch, setSkillSearch] = useState('')
+  const [showSkillDropdown, setShowSkillDropdown] = useState(false)
+  const [loadingSkills, setLoadingSkills] = useState(false)
   
   // Location cascading dropdown states - Update form
   const [selectedProvinceUpdate, setSelectedProvinceUpdate] = useState(null)
@@ -278,6 +286,46 @@ export default function Profile(){
 
     fetchDistricts()
   }, [selectedProvinceCreate])
+
+  // Load skill categories on mount for entity modal (skills)
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await SkillService.getCategories()
+        const data = res?.data || []
+        // map to names for select options (frontend currently expects string categories)
+        const names = data.map((c) => (typeof c === 'string' ? c : c.name || c))
+        setSkillCategories(names)
+        setInitialSkillCategories(names)
+      } catch (err) {
+        console.error('Failed to fetch skill categories:', err)
+        setSkillCategories([])
+        setInitialSkillCategories([])
+      }
+    }
+    fetchCategories()
+  }, [])
+
+  const fetchSkillsForCategory = async (category) => {
+    if (!category) {
+      setAvailableSkills([])
+      setInitialAvailableSkills([])
+      return
+    }
+    setLoadingSkills(true)
+    try {
+      const res = await SkillService.search({ category, limit: 500 })
+      const data = res?.data || []
+      setAvailableSkills(data)
+      setInitialAvailableSkills(data)
+    } catch (err) {
+      console.error('Failed to fetch skills for category:', err)
+      setAvailableSkills([])
+      setInitialAvailableSkills([])
+    } finally {
+      setLoadingSkills(false)
+    }
+  }
 
   // Fetch districts when province is selected - Update form
   useEffect(() => {
@@ -580,15 +628,21 @@ export default function Profile(){
       const found = jobTypeOptions.find((opt) => opt.value === type)
       return found ? found.label : type
     })
+    const normalizeText = (val) => {
+      if(!val && val !== '') return ''
+      if(typeof val === 'string') return val
+      if(val && typeof val === 'object') return val.name || String(val)
+      return String(val)
+    }
     return {
-      name: profile.full_name,
-      headline: profile.headline,
-      location: profile.location_text,
-      desiredJob: profile.desired_job_title,
-      phone: profile.phone_number,
-      website: profile.personal_website,
-      linkedin: profile.linkedin_url,
-      github: profile.github_url,
+      name: normalizeText(profile.full_name),
+      headline: normalizeText(profile.headline),
+      location: normalizeText(profile.location_text),
+      desiredJob: normalizeText(profile.desired_job_title),
+      phone: normalizeText(profile.phone_number),
+      website: normalizeText(profile.personal_website),
+      linkedin: normalizeText(profile.linkedin_url),
+      github: normalizeText(profile.github_url),
       jobTypes,
       updatedAt: profile.updated_at,
       looking: profile.is_looking_for_job,
@@ -711,30 +765,46 @@ export default function Profile(){
         disabled: !hasProfile,
         idKey: 'skill_id',
         items: profile?.skills || [],
+        // We'll keep level/proficiency as fields but also manage skill_id via custom modal UI
         fields: [
           { name: 'level', label: 'Cấp độ', type: 'select', options: skillLevelOptions },
           { name: 'proficiency', label: 'Điểm thành thạo (1-5)', type: 'number', min: 1, max: 5 },
         ],
         initialValues: {
+          skill_id: '',
+          skill_name: '',
+          category: '',
           level: '',
           proficiency: '',
         },
         toForm: (item) => ({
+          skill_id: item?.skill_id || item?.id || '',
+          skill_name: item?.skills?.name || (item?.name || ''),
+          category: item?.skills?.category || '',
           level: item?.level || '',
           proficiency: item?.proficiency ?? '',
         }),
-        toPayload: (values) => ({
-          level: values.level || undefined,
-          proficiency: values.proficiency ? Number(values.proficiency) : undefined,
-        }),
+        toPayload: (values) => {
+          const payload = {}
+          if (values.skill_id) payload.skill_id = values.skill_id
+          if (values.level) payload.level = values.level
+          if (values.proficiency !== undefined && values.proficiency !== '') payload.proficiency = Number(values.proficiency)
+          return payload
+        },
         create: (payload) => ProfileClient.skills.create(payload),
         update: (id, payload) => ProfileClient.skills.update(id, payload),
         delete: (id) => ProfileClient.skills.delete(id),
-        render: (item) => ({
-          title: item.skills?.name || 'Kỹ năng',
-          subtitle: item.skills?.category || '',
-          meta: [item.level && item.level.toUpperCase(), item.proficiency && `Điểm ${item.proficiency}`].filter(Boolean).join(' • '),
-        }),
+        render: (item) => {
+          // Support two shapes:
+          // 1) { skill_id, level, proficiency, skills: { name, category } }
+          // 2) plain skill object { id, name, slug, type, category? }
+          const skillObj = item.skills || item
+          const title = skillObj?.name || 'Kỹ năng'
+          const rawCategory = skillObj?.category
+          const subtitle = typeof rawCategory === 'string' ? rawCategory : (rawCategory && rawCategory.name) || ''
+          const meta = [item.level && item.level.toUpperCase(), item.proficiency && `Điểm ${item.proficiency}`].filter(Boolean).join(' • ')
+          return { title, subtitle, meta }
+        },
       },
       certifications: {
         key: 'certifications',
@@ -1164,24 +1234,46 @@ export default function Profile(){
                           </div>
                         ) : (
                           <div className="autocomplete-wrapper">
-                            <input 
-                              type="text"
-                              value={provinceSearchCreate}
-                              onChange={(e) => {
-                                setProvinceSearchCreate(e.target.value)
-                                setShowProvinceDropdownCreate(true)
-                              }}
-                              onFocus={() => {
-                                setShowProvinceDropdownCreate(true)
-                                if (!provinceSearchCreate.trim() && initialProvinces.length > 0) {
-                                  setProvinces(initialProvinces)
-                                }
-                              }}
-                              onBlur={() => {
-                                setTimeout(() => setShowProvinceDropdownCreate(false), 150)
-                              }}
-                              placeholder="Tìm kiếm tỉnh/thành phố..."
-                            />
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <input 
+                                type="text"
+                                value={provinceSearchCreate}
+                                onChange={(e) => {
+                                  setProvinceSearchCreate(e.target.value)
+                                  setShowProvinceDropdownCreate(true)
+                                }}
+                                onFocus={() => {
+                                  setShowProvinceDropdownCreate(true)
+                                  if (!provinceSearchCreate.trim() && initialProvinces.length > 0) {
+                                    setProvinces(initialProvinces)
+                                  }
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => setShowProvinceDropdownCreate(false), 150)
+                                }}
+                                placeholder="Tìm kiếm tỉnh/thành phố..."
+                                style={{ flex: 1 }}
+                              />
+                              <button
+                                type="button"
+                                className="btn ghost"
+                                onMouseDown={(e) => {
+                                  // prevent input blur before toggle
+                                  e.preventDefault()
+                                  // toggle dropdown and ensure provinces populated
+                                  setShowProvinceDropdownCreate((s) => {
+                                    const next = !s
+                                    if (next && (!provinces || provinces.length === 0) && initialProvinces.length > 0) {
+                                      setProvinces(initialProvinces)
+                                    }
+                                    return next
+                                  })
+                                }}
+                                aria-label="Chọn tỉnh/thành phố"
+                              >
+                                ▾
+                              </button>
+                            </div>
                             {showProvinceDropdownCreate && provinces.length > 0 && (
                               <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
                                 {provinces.map(province => (
@@ -1215,7 +1307,7 @@ export default function Profile(){
                               value={districtSearchCreate}
                               onChange={(e) => {
                                 setDistrictSearchCreate(e.target.value)
-                                setShowDistrictDropdownCreate(true)
+                                if (selectedProvinceCreate) setShowDistrictDropdownCreate(true)
                               }}
                               onFocus={() => {
                                 if (selectedProvinceCreate) {
@@ -1236,6 +1328,7 @@ export default function Profile(){
                                     : 'Tìm kiếm quận/huyện...'
                               }
                               disabled={!selectedProvinceCreate || loadingDistrictsCreate}
+                              title={!selectedProvinceCreate ? 'Chọn tỉnh/thành phố trước' : ''}
                             />
                             {showDistrictDropdownCreate && selectedProvinceCreate && !loadingDistrictsCreate && availableDistrictsCreate.length > 0 && (
                               <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
@@ -1285,21 +1378,35 @@ export default function Profile(){
                               </div>
                             ) : (
                               <div className="autocomplete-wrapper">
-                                <input 
-                                  type="text"
-                                  value={provinceSearchUpdate}
-                                  onChange={(e) => {
-                                    setProvinceSearchUpdate(e.target.value)
-                                    setShowProvinceDropdownUpdate(true)
-                                  }}
-                                  onFocus={() => {
-                                    setShowProvinceDropdownUpdate(true)
-                                  }}
-                                  onBlur={() => {
-                                    setTimeout(() => setShowProvinceDropdownUpdate(false), 150)
-                                  }}
-                                  placeholder="Tìm kiếm tỉnh/thành phố..."
-                                />
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                  <input 
+                                    type="text"
+                                    value={provinceSearchUpdate}
+                                    onChange={(e) => {
+                                      setProvinceSearchUpdate(e.target.value)
+                                      setShowProvinceDropdownUpdate(true)
+                                    }}
+                                    onFocus={() => {
+                                      setShowProvinceDropdownUpdate(true)
+                                    }}
+                                    onBlur={() => {
+                                      setTimeout(() => setShowProvinceDropdownUpdate(false), 150)
+                                    }}
+                                    placeholder="Tìm kiếm tỉnh/thành phố..."
+                                    style={{ flex: 1 }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn ghost"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      setShowProvinceDropdownUpdate((s) => !s)
+                                    }}
+                                    aria-label="Chọn tỉnh/thành phố"
+                                  >
+                                    ▾
+                                  </button>
+                                </div>
                                 {showProvinceDropdownUpdate && filteredProvincesUpdate.length > 0 && (
                                   <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
                                     {filteredProvincesUpdate.map(province => (
@@ -1333,7 +1440,7 @@ export default function Profile(){
                                   value={districtSearchUpdate}
                                   onChange={(e) => {
                                     setDistrictSearchUpdate(e.target.value)
-                                    setShowDistrictDropdownUpdate(true)
+                                    if (selectedProvinceUpdate) setShowDistrictDropdownUpdate(true)
                                   }}
                                   onFocus={() => {
                                     if (selectedProvinceUpdate) {
@@ -1351,6 +1458,7 @@ export default function Profile(){
                                         : 'Tìm kiếm quận/huyện...'
                                   }
                                   disabled={!selectedProvinceUpdate || loadingDistrictsUpdate}
+                                  title={!selectedProvinceUpdate ? 'Chọn tỉnh/thành phố trước' : ''}
                                 />
                                 {showDistrictDropdownUpdate && selectedProvinceUpdate && !loadingDistrictsUpdate && filteredDistrictsUpdate.length > 0 && (
                                   <div className="autocomplete-dropdown" onMouseDown={(e) => e.preventDefault()}>
@@ -1490,69 +1598,169 @@ export default function Profile(){
               {entityDefinitions[entityModal.type]?.description}
             </p>
             <div className="entity-form__grid">
-              {entityDefinitions[entityModal.type]?.fields.map((field) => {
-                const value = entityForm[field.name] ?? (field.type === 'checkbox' ? false : '')
-                const disabled = (field.disableOnEdit && entityModal.mode === 'edit') || (field.name === 'expiry_date' && entityForm.never_expires)
-                if(field.type === 'textarea'){
+              {entityModal.type === 'skills' ? (
+                <>
+                  <label className="entity-field">
+                    <span>Danh mục kỹ năng</span>
+                    <select
+                      name="category"
+                      value={entityForm.category || ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setEntityForm((prev) => ({ ...prev, category: val, skill_id: '', skill_name: '' }))
+                        fetchSkillsForCategory(val)
+                      }}
+                      required
+                    >
+                      <option value="">Chọn danh mục...</option>
+                      {skillCategories.map((cat, i) => (
+                        <option key={i} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="entity-field">
+                    <span>Kỹ năng</span>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        value={skillSearch || entityForm.skill_name || ''}
+                        onChange={(e) => {
+                          const q = e.target.value
+                          setSkillSearch(q)
+                          setShowSkillDropdown(true)
+                          if (!q.trim()) {
+                            setAvailableSkills(initialAvailableSkills)
+                          } else {
+                            setAvailableSkills(initialAvailableSkills.filter(s => s.name.toLowerCase().includes(q.toLowerCase())))
+                          }
+                        }}
+                        onFocus={() => {
+                          if (!entityForm.category) return
+                          setShowSkillDropdown(true)
+                          if (!skillSearch.trim() && initialAvailableSkills.length > 0) {
+                            setAvailableSkills(initialAvailableSkills)
+                          }
+                        }}
+                        onBlur={() => setTimeout(() => setShowSkillDropdown(false), 150)}
+                        placeholder={loadingSkills ? 'Đang tải...' : (!entityForm.category ? 'Chọn danh mục trước' : 'Tìm hoặc chọn kỹ năng...')}
+                        disabled={!entityForm.category || loadingSkills}
+                        required
+                      />
+                      {showSkillDropdown && entityForm.category && !loadingSkills && availableSkills.length > 0 && (
+                        <div className="autocomplete-dropdown" style={{ position: 'absolute', zIndex: 30 }} onMouseDown={(e) => e.preventDefault()}>
+                          {availableSkills.map(s => (
+                            <div
+                              key={s.id}
+                              className="autocomplete-item"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                setEntityForm((prev) => ({ ...prev, skill_id: s.id, skill_name: s.name }))
+                                setSkillSearch(s.name)
+                                setShowSkillDropdown(false)
+                              }}
+                            >
+                              {s.name}{s.category ? ` (${s.category})` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+
+                  <label className="entity-field">
+                    <span>Độ thành thạo (1-5)</span>
+                    <input
+                      type="number"
+                      name="proficiency"
+                      min="1"
+                      max="5"
+                      value={entityForm.proficiency ?? ''}
+                      onChange={(e) => setEntityForm((prev) => ({ ...prev, proficiency: e.target.value ? Number(e.target.value) : '' }))}
+                      required
+                    />
+                    <small className="muted">1 (thấp) - 5 (cao)</small>
+                  </label>
+
+                  <label className="entity-field">
+                    <span>Cấp độ</span>
+                    <select
+                      name="level"
+                      value={entityForm.level || ''}
+                      onChange={(e) => setEntityForm((prev) => ({ ...prev, level: e.target.value }))}
+                    >
+                      <option value="">Chọn cấp độ</option>
+                      {skillLevelOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : (
+                entityDefinitions[entityModal.type]?.fields.map((field) => {
+                  const value = entityForm[field.name] ?? (field.type === 'checkbox' ? false : '')
+                  const disabled = (field.disableOnEdit && entityModal.mode === 'edit') || (field.name === 'expiry_date' && entityForm.never_expires)
+                  if(field.type === 'textarea'){
+                    return (
+                      <label key={field.name} className="entity-field">
+                        <span>{field.label}</span>
+                        <textarea
+                          name={field.name}
+                          rows={4}
+                          value={value}
+                          onChange={(e) => onEntityFieldChange(field, e)}
+                          placeholder={field.placeholder}
+                          disabled={disabled}
+                          required={field.required}
+                        />
+                      </label>
+                    )
+                  }
+                  if(field.type === 'select'){
+                    return (
+                      <label key={field.name} className="entity-field">
+                        <span>{field.label}</span>
+                        <select
+                          name={field.name}
+                          value={value}
+                          onChange={(e) => onEntityFieldChange(field, e)}
+                          disabled={disabled}
+                          required={field.required}
+                        >
+                          <option value="">Chọn</option>
+                          {(field.options || []).map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )
+                  }
+                  if(field.type === 'checkbox'){
+                    return (
+                      <label key={field.name} className="entity-field checkbox-field">
+                        <input type="checkbox" name={field.name} checked={Boolean(value)} onChange={(e) => onEntityFieldChange(field, e)} disabled={disabled} />
+                        <span>{field.label}</span>
+                      </label>
+                    )
+                  }
                   return (
                     <label key={field.name} className="entity-field">
                       <span>{field.label}</span>
-                      <textarea
+                      <input
+                        type={field.type || 'text'}
                         name={field.name}
-                        rows={4}
                         value={value}
                         onChange={(e) => onEntityFieldChange(field, e)}
                         placeholder={field.placeholder}
                         disabled={disabled}
                         required={field.required}
+                        min={field.min}
+                        max={field.max}
                       />
                     </label>
                   )
-                }
-                if(field.type === 'select'){
-                  return (
-                    <label key={field.name} className="entity-field">
-                      <span>{field.label}</span>
-                      <select
-                        name={field.name}
-                        value={value}
-                        onChange={(e) => onEntityFieldChange(field, e)}
-                        disabled={disabled}
-                        required={field.required}
-                      >
-                        <option value="">Chọn</option>
-                        {(field.options || []).map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )
-                }
-                if(field.type === 'checkbox'){
-                  return (
-                    <label key={field.name} className="entity-field checkbox-field">
-                      <input type="checkbox" name={field.name} checked={Boolean(value)} onChange={(e) => onEntityFieldChange(field, e)} disabled={disabled} />
-                      <span>{field.label}</span>
-                    </label>
-                  )
-                }
-                return (
-                  <label key={field.name} className="entity-field">
-                    <span>{field.label}</span>
-                    <input
-                      type={field.type || 'text'}
-                      name={field.name}
-                      value={value}
-                      onChange={(e) => onEntityFieldChange(field, e)}
-                      placeholder={field.placeholder}
-                      disabled={disabled}
-                      required={field.required}
-                      min={field.min}
-                      max={field.max}
-                    />
-                  </label>
-                )
-              })}
+                })
+              )}
             </div>
             {entityModalError && <div className="error-banner">{entityModalError}</div>}
             <div className="modal-actions">
@@ -1615,8 +1823,9 @@ function ProfileEntitySection({ definition, onAdd, onEdit, onDelete }){
         <div className="profile-entity__list">
           {definition.items.map((item) => {
             const rendered = definition.render(item)
+            const itemKey = item[definition.idKey] ?? item.id
             return (
-              <article key={item[definition.idKey]} className="profile-entity__item">
+              <article key={itemKey} className="profile-entity__item">
                 <div>
                   <div className="profile-entity__title">{rendered.title || '-'}</div>
                   {rendered.subtitle && <div className="profile-entity__subtitle">{rendered.subtitle}</div>}
