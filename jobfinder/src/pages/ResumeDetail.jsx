@@ -225,21 +225,24 @@ export default function ResumeDetail() {
     
     // 1. Convert images to base64 (bao gồm cả absolute URLs từ S3/CDN)
     const images = clone.querySelectorAll('img')
+    const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
     await Promise.all(
       Array.from(images).map(async (img) => {
         // Convert tất cả images (bao gồm cả http/https URLs) sang base64
         if (img.src && !img.src.startsWith('data:')) {
           try {
-            // Fetch image với credentials nếu cần (cho S3 với CORS)
-            const response = await fetch(img.src, {
-              mode: 'cors',
-              credentials: 'include'
-            })
-            
-            if (!response.ok) {
-              throw new Error(`Failed to fetch image: ${response.status}`)
+            // Try direct fetch first (may be blocked by CORS)
+            let response
+            try {
+              response = await fetch(img.src, { mode: 'cors', credentials: 'include' })
+              if (!response.ok) throw new Error(`Failed direct fetch: ${response.status}`)
+            } catch (directErr) {
+              // Fallback to backend proxy if direct fetch fails
+              const proxyUrl = (API_BASE ? `${API_BASE}` : '') + `/api/proxy?url=${encodeURIComponent(img.src)}`
+              response = await fetch(proxyUrl)
+              if (!response.ok) throw new Error(`Failed proxy fetch: ${response.status}`)
             }
-            
+
             const blob = await response.blob()
             const base64 = await new Promise((resolve, reject) => {
               const reader = new FileReader()
@@ -249,21 +252,72 @@ export default function ResumeDetail() {
             })
             img.src = base64
           } catch (err) {
-            console.warn('Failed to convert image to base64:', err, img.src)
-            // Nếu không convert được, giữ nguyên URL (backend có thể xử lý)
-            // Hoặc có thể dùng placeholder nếu cần
+            console.warn('Failed to convert image to base64 (direct+proxy):', err, img.src)
+            // If conversion fails, keep original src — backend may fetch it during PDF generation
           }
         }
       })
     )
     
-    // 2. Get CSS từ style tags trong clone
+    // 2. Get CSS: extract inline <style> inside the clone and also collect application's stylesheet rules
     let allCSS = ''
     const styleTags = clone.querySelectorAll('style')
     styleTags.forEach((style) => {
       allCSS += style.textContent + '\n'
     })
-    
+
+    // Also attempt to collect CSS rules from document.styleSheets (app bundle CSS)
+    try {
+      const sheets = Array.from(document.styleSheets || [])
+      for (const sheet of sheets) {
+        try {
+          const rules = sheet.cssRules || sheet.rules
+          if (!rules) continue
+          for (const r of Array.from(rules)) {
+            // Some rules may be CSSImportRule etc.; cssText is a safe way to serialize
+            if (r && r.cssText) allCSS += r.cssText + '\n'
+          }
+        } catch (err) {
+          // Accessing cssRules can throw for cross-origin stylesheets; ignore those
+          // console.warn('Could not access stylesheet rules:', err, sheet.href)
+          continue
+        }
+      }
+    } catch (e) {
+      // ignore overall failures
+    }
+
+    // Also inline external <link rel="stylesheet"> referenced in the clone (fetch with proxy fallback)
+    try {
+      const linkTags = Array.from(clone.querySelectorAll('link[rel="stylesheet"]'))
+      await Promise.all(linkTags.map(async (link) => {
+        const href = link.href
+        if (!href) return
+        try {
+          // Try direct fetch first
+          let cssRes
+          try {
+            cssRes = await fetch(href, { mode: 'cors' })
+            if (!cssRes.ok) throw new Error(`Direct CSS fetch failed ${cssRes.status}`)
+          } catch (directErr) {
+            // Fallback to backend proxy
+            const proxyUrl = (API_BASE ? `${API_BASE}` : '') + `/api/proxy?url=${encodeURIComponent(href)}`
+            cssRes = await fetch(proxyUrl)
+            if (!cssRes.ok) throw new Error(`Proxy CSS fetch failed ${cssRes.status}`)
+          }
+          const cssText = await cssRes.text()
+          allCSS += '\n/* inlined from ' + href + ' */\n' + cssText
+          // remove link tag from clone after inlining
+          link.remove()
+        } catch (err) {
+          // ignore individual link failures
+          console.warn('Failed to inline external stylesheet (direct+proxy):', href, err)
+        }
+      }))
+    } catch (e) {
+      // ignore
+    }
+
     // 3. Remove style tags khỏi clone (đã extract CSS rồi)
     styleTags.forEach((tag) => tag.remove())
     
@@ -377,28 +431,39 @@ export default function ResumeDetail() {
         alert('Không thể lấy HTML từ preview. PDF sẽ được tạo từ template backend.')
       }
       
-      // Map theme từ frontend sang backend format
+      // Map theme từ frontend sang backend format (gửi trực tiếp tên template chuẩn)
       const themeMap = {
         'professional': 'professional',
-        'timeline': 'modern',
-        'compact': 'minimal',
-        'default': 'modern'
+        'timeline': 'timeline',
+        'compact': 'compact',
+        'default': 'professional'
       }
-      const backendTheme = themeMap[selectedTheme] || 'modern'
+      const backendTheme = themeMap[selectedTheme] || 'professional'
       
+      // Lấy viewport width để đảm bảo backend render PDF consistent với frontend
+      const viewportWidth = window.innerWidth || 1200
+
       console.log('📤 Gửi request export với:', {
         hasHtml: !!htmlContent,
         htmlLength: htmlContent?.length || 0,
         template: backendTheme,
-        format
+        format,
+        viewportWidth
       })
-      
-      // Gửi request với HTML từ frontend (nếu có) hoặc để backend generate
-      const result = await ResumeApi.exportResume(id, {
+
+      // Build payload: prefer sending `template` only so backend generates from server template.
+      const payload = {
         template: backendTheme,
         format: format,
-        html: htmlContent // Gửi HTML từ frontend template
-      })
+        viewportWidth: viewportWidth
+      }
+      // Include frontend HTML when available so backend can inject preview content into server template
+      if (htmlContent) {
+        payload.html = htmlContent
+      }
+
+      console.log('📤 Export payload:', payload)
+      const result = await ResumeApi.exportResume(id, payload)
       
       if (format === 'html') {
         const blob = new Blob([result.content || htmlContent || ''], { type: 'text/html' })

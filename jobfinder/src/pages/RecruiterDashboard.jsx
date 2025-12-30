@@ -4,6 +4,7 @@ import { AuthClient } from "../services/authClient"
 import { getAuthUser, getRefreshToken, logout as clearAuth } from "../auth/auth"
 import { companyApi } from "../services/companyApi"
 import MyJobs from "./MyJobs.jsx"
+import TalentPool from "./TalentPool.jsx"
 import { JobService, ApplicationService } from "../lib/api.js"
 import "./recruiter-dashboard.css"
 
@@ -311,17 +312,26 @@ export default function RecruiterDashboard() {
 
   const handleLogout = async () => {
     setProfileOpen(false)
+    // Immediately clear local auth state and navigate, then attempt server logout in background.
     try {
-      const refresh = getRefreshToken()
-      if (refresh) {
-        await AuthClient.logout(refresh)
-      }
-    } catch (error) {
-      console.warn("Đăng xuất recruiter thất bại:", error?.message)
-    } finally {
       clearAuth()
       navigate("/login", { replace: true })
+    } catch (err) {
+      // ensure we still attempt to clear auth
+      try { clearAuth() } catch (e) {}
     }
+
+    // Fire-and-forget server logout to invalidate refresh token if present.
+    (async () => {
+      try {
+        const refresh = getRefreshToken()
+        if (refresh) {
+          await AuthClient.logout(refresh)
+        }
+      } catch (error) {
+        console.warn("Đăng xuất recruiter (server) thất bại:", error?.message)
+      }
+    })()
   }
 
   return (
@@ -760,14 +770,7 @@ export default function RecruiterDashboard() {
           )}
 
           {isTalentPoolPage && (
-            <section className="rd-card">
-              <div className="rd-card__head">
-                <div>
-                  <h2>Talent Pool</h2>
-                  <p className="rd-muted">Tính năng đang được phát triển.</p>
-                </div>
-              </div>
-            </section>
+            <TalentPool />
           )}
         </main>
       </div>

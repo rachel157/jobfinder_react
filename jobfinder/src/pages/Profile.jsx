@@ -607,7 +607,19 @@ export default function Profile(){
   const onUpdate = async (e) => {
     e.preventDefault()
     setUpdateStatus({ loading: true, message: '', error: '' })
-    const payload = buildPayload(updateForm, selectedDistrictUpdate, selectedProvinceUpdate)
+    // Debug: log location-related state to help debug lost district after refresh
+    console.log('🔧 onUpdate - location debug:', {
+      selectedProvinceUpdate,
+      selectedDistrictUpdate,
+      formLocationId: updateForm.location_id,
+      profileLocationId: profile?.location_id
+    })
+
+    let payload = buildPayload(updateForm, selectedDistrictUpdate, selectedProvinceUpdate)
+    // Ensure payload.location_id explicitly set from selected district if available
+    if (selectedDistrictUpdate?.id) {
+      payload.location_id = selectedDistrictUpdate.id
+    }
     if(Object.keys(payload).length === 0){
       setUpdateStatus({ loading: false, message: '', error: 'Hãy thay đổi ít nhất một trường trước khi cập nhật.' })
       return
@@ -1235,25 +1247,25 @@ export default function Profile(){
                         ) : (
                           <div className="autocomplete-wrapper">
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                              <input 
-                                type="text"
-                                value={provinceSearchCreate}
-                                onChange={(e) => {
-                                  setProvinceSearchCreate(e.target.value)
-                                  setShowProvinceDropdownCreate(true)
-                                }}
-                                onFocus={() => {
-                                  setShowProvinceDropdownCreate(true)
-                                  if (!provinceSearchCreate.trim() && initialProvinces.length > 0) {
-                                    setProvinces(initialProvinces)
-                                  }
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => setShowProvinceDropdownCreate(false), 150)
-                                }}
-                                placeholder="Tìm kiếm tỉnh/thành phố..."
+                            <input 
+                              type="text"
+                              value={provinceSearchCreate}
+                              onChange={(e) => {
+                                setProvinceSearchCreate(e.target.value)
+                                setShowProvinceDropdownCreate(true)
+                              }}
+                              onFocus={() => {
+                                setShowProvinceDropdownCreate(true)
+                                if (!provinceSearchCreate.trim() && initialProvinces.length > 0) {
+                                  setProvinces(initialProvinces)
+                                }
+                              }}
+                              onBlur={() => {
+                                setTimeout(() => setShowProvinceDropdownCreate(false), 150)
+                              }}
+                              placeholder="Tìm kiếm tỉnh/thành phố..."
                                 style={{ flex: 1 }}
-                              />
+                            />
                               <button
                                 type="button"
                                 className="btn ghost"
@@ -1379,22 +1391,22 @@ export default function Profile(){
                             ) : (
                               <div className="autocomplete-wrapper">
                                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                  <input 
-                                    type="text"
-                                    value={provinceSearchUpdate}
-                                    onChange={(e) => {
-                                      setProvinceSearchUpdate(e.target.value)
-                                      setShowProvinceDropdownUpdate(true)
-                                    }}
-                                    onFocus={() => {
-                                      setShowProvinceDropdownUpdate(true)
-                                    }}
-                                    onBlur={() => {
-                                      setTimeout(() => setShowProvinceDropdownUpdate(false), 150)
-                                    }}
-                                    placeholder="Tìm kiếm tỉnh/thành phố..."
+                                <input 
+                                  type="text"
+                                  value={provinceSearchUpdate}
+                                  onChange={(e) => {
+                                    setProvinceSearchUpdate(e.target.value)
+                                    setShowProvinceDropdownUpdate(true)
+                                  }}
+                                  onFocus={() => {
+                                    setShowProvinceDropdownUpdate(true)
+                                  }}
+                                  onBlur={() => {
+                                    setTimeout(() => setShowProvinceDropdownUpdate(false), 150)
+                                  }}
+                                  placeholder="Tìm kiếm tỉnh/thành phố..."
                                     style={{ flex: 1 }}
-                                  />
+                                />
                                   <button
                                     type="button"
                                     className="btn ghost"
@@ -1698,67 +1710,67 @@ export default function Profile(){
                 </>
               ) : (
                 entityDefinitions[entityModal.type]?.fields.map((field) => {
-                  const value = entityForm[field.name] ?? (field.type === 'checkbox' ? false : '')
-                  const disabled = (field.disableOnEdit && entityModal.mode === 'edit') || (field.name === 'expiry_date' && entityForm.never_expires)
-                  if(field.type === 'textarea'){
-                    return (
-                      <label key={field.name} className="entity-field">
-                        <span>{field.label}</span>
-                        <textarea
-                          name={field.name}
-                          rows={4}
-                          value={value}
-                          onChange={(e) => onEntityFieldChange(field, e)}
-                          placeholder={field.placeholder}
-                          disabled={disabled}
-                          required={field.required}
-                        />
-                      </label>
-                    )
-                  }
-                  if(field.type === 'select'){
-                    return (
-                      <label key={field.name} className="entity-field">
-                        <span>{field.label}</span>
-                        <select
-                          name={field.name}
-                          value={value}
-                          onChange={(e) => onEntityFieldChange(field, e)}
-                          disabled={disabled}
-                          required={field.required}
-                        >
-                          <option value="">Chọn</option>
-                          {(field.options || []).map((opt) => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    )
-                  }
-                  if(field.type === 'checkbox'){
-                    return (
-                      <label key={field.name} className="entity-field checkbox-field">
-                        <input type="checkbox" name={field.name} checked={Boolean(value)} onChange={(e) => onEntityFieldChange(field, e)} disabled={disabled} />
-                        <span>{field.label}</span>
-                      </label>
-                    )
-                  }
+                const value = entityForm[field.name] ?? (field.type === 'checkbox' ? false : '')
+                const disabled = (field.disableOnEdit && entityModal.mode === 'edit') || (field.name === 'expiry_date' && entityForm.never_expires)
+                if(field.type === 'textarea'){
                   return (
                     <label key={field.name} className="entity-field">
                       <span>{field.label}</span>
-                      <input
-                        type={field.type || 'text'}
+                      <textarea
                         name={field.name}
+                        rows={4}
                         value={value}
                         onChange={(e) => onEntityFieldChange(field, e)}
                         placeholder={field.placeholder}
                         disabled={disabled}
                         required={field.required}
-                        min={field.min}
-                        max={field.max}
                       />
                     </label>
                   )
+                }
+                if(field.type === 'select'){
+                  return (
+                    <label key={field.name} className="entity-field">
+                      <span>{field.label}</span>
+                      <select
+                        name={field.name}
+                        value={value}
+                        onChange={(e) => onEntityFieldChange(field, e)}
+                        disabled={disabled}
+                        required={field.required}
+                      >
+                        <option value="">Chọn</option>
+                        {(field.options || []).map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )
+                }
+                if(field.type === 'checkbox'){
+                  return (
+                    <label key={field.name} className="entity-field checkbox-field">
+                      <input type="checkbox" name={field.name} checked={Boolean(value)} onChange={(e) => onEntityFieldChange(field, e)} disabled={disabled} />
+                      <span>{field.label}</span>
+                    </label>
+                  )
+                }
+                return (
+                  <label key={field.name} className="entity-field">
+                    <span>{field.label}</span>
+                    <input
+                      type={field.type || 'text'}
+                      name={field.name}
+                      value={value}
+                      onChange={(e) => onEntityFieldChange(field, e)}
+                      placeholder={field.placeholder}
+                      disabled={disabled}
+                      required={field.required}
+                      min={field.min}
+                      max={field.max}
+                    />
+                  </label>
+                )
                 })
               )}
             </div>

@@ -582,6 +582,190 @@ export const ApplicationService = {
 }
 
 // ============================================
+// MATCHING SERVICE (Recruiter)
+// ============================================
+
+export const MatchingService = {
+  /**
+   * Match candidates for a specific job
+   * @param {string} jobId - Job ID to match candidates for
+   * @param {Object} filters - Matching filters
+   */
+  matchCandidates: (jobId, filters = {}) => {
+    return api.post(`/api/matching/job/${jobId}/candidates`, {
+      size: filters.size || 50,
+      filters: {
+        min_score: filters.minScore || 0,
+        location: filters.location || undefined,
+        experience_min: filters.experienceMin || undefined,
+        experience_max: filters.experienceMax || undefined,
+        education_level: filters.education || undefined,
+        // Add other filters as needed
+        ...filters
+      }
+    })
+  }
+}
+
+// ============================================
+// TALENT POOL SERVICE (Recruiter)
+// ============================================
+
+export const TalentPoolService = {
+  /**
+   * Get saved candidates from talent pool
+   * @param {Object} filters - Pagination and filter options
+   */
+  getSavedCandidates: (filters = {}) => {
+    try {
+      return api.get(`/api/talent-pool/candidates`, {
+        params: {
+          page: filters.page || 1,
+          limit: filters.limit || 20,
+          job_id: filters.jobId || undefined
+        }
+      })
+    } catch (error) {
+      // Fallback to localStorage if API is not available
+      console.warn('TalentPool API not available, using localStorage fallback')
+      return Promise.resolve({
+        data: this._getLocalSavedCandidates(filters)
+      })
+    }
+  },
+
+  /**
+   * Save candidate to talent pool
+   * @param {string} candidateId - Candidate profile ID
+   * @param {string} jobId - Job ID
+   * @param {string} note - Optional note
+   */
+  saveCandidate: (candidateId, jobId, note = '') => {
+    try {
+      return api.post('/api/talent-pool/candidates', {
+        candidate_id: candidateId,
+        job_id: jobId,
+        note
+      })
+    } catch (error) {
+      // Fallback to localStorage
+      console.warn('TalentPool API not available, using localStorage fallback')
+      this._saveLocalCandidate(candidateId, jobId, note)
+      return Promise.resolve({ success: true })
+    }
+  },
+
+  /**
+   * Remove candidate from talent pool
+   * @param {string} candidateId - Candidate profile ID
+   * @param {string} jobId - Job ID
+   */
+  removeCandidate: (candidateId, jobId) => {
+    try {
+      return api.delete(`/api/talent-pool/candidates/${candidateId}`, {
+        params: { job_id: jobId }
+      })
+    } catch (error) {
+      // Fallback to localStorage
+      console.warn('TalentPool API not available, using localStorage fallback')
+      this._removeLocalCandidate(candidateId, jobId)
+      return Promise.resolve({ success: true })
+    }
+  },
+
+  /**
+   * Bulk save candidates to talent pool
+   * @param {string[]} candidateIds - Array of candidate profile IDs
+   * @param {string} jobId - Job ID
+   */
+  bulkSaveCandidates: (candidateIds, jobId) => {
+    try {
+      return api.post('/api/talent-pool/candidates/bulk', {
+        candidate_ids: candidateIds,
+        job_id: jobId
+      })
+    } catch (error) {
+      // Fallback to localStorage
+      console.warn('TalentPool API not available, using localStorage fallback')
+      candidateIds.forEach(candidateId => {
+        this._saveLocalCandidate(candidateId, jobId)
+      })
+      return Promise.resolve({ success: true, saved_count: candidateIds.length })
+    }
+  },
+
+  // Local storage fallback methods
+  _getLocalSavedCandidates: (filters = {}) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('talent_pool') || '[]')
+      const page = filters.page || 1
+      const limit = filters.limit || 20
+      const startIndex = (page - 1) * limit
+      const endIndex = startIndex + limit
+
+      let filtered = saved
+      if (filters.jobId) {
+        filtered = saved.filter(item => item.jobId === filters.jobId)
+      }
+
+      return {
+        data: filtered.slice(startIndex, endIndex),
+        pagination: {
+          current_page: page,
+          total_pages: Math.ceil(filtered.length / limit),
+          total_count: filtered.length,
+          per_page: limit
+        }
+      }
+    } catch (error) {
+      console.error('Error reading from localStorage:', error)
+      return { data: [], pagination: { current_page: 1, total_pages: 0, total_count: 0, per_page: 20 } }
+    }
+  },
+
+  _saveLocalCandidate: (candidateId, jobId, note = '') => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('talent_pool') || '[]')
+      const existingIndex = saved.findIndex(item =>
+        item.candidateId === candidateId && item.jobId === jobId
+      )
+
+      if (existingIndex >= 0) {
+        // Update existing
+        saved[existingIndex].note = note
+        saved[existingIndex].updatedAt = new Date().toISOString()
+      } else {
+        // Add new
+        saved.push({
+          id: `${candidateId}_${jobId}_${Date.now()}`,
+          candidateId,
+          jobId,
+          note,
+          savedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      }
+
+      localStorage.setItem('talent_pool', JSON.stringify(saved))
+    } catch (error) {
+      console.error('Error saving to localStorage:', error)
+    }
+  },
+
+  _removeLocalCandidate: (candidateId, jobId) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('talent_pool') || '[]')
+      const filtered = saved.filter(item =>
+        !(item.candidateId === candidateId && item.jobId === jobId)
+      )
+      localStorage.setItem('talent_pool', JSON.stringify(filtered))
+    } catch (error) {
+      console.error('Error removing from localStorage:', error)
+    }
+  }
+}
+
+// ============================================
 // USER SERVICE
 // ============================================
 
